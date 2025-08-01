@@ -1,15 +1,21 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../supabase'
-import { Printer, Eye, Search, User, History, Clock } from 'lucide-react'
+import { Printer, Eye, Search, User, History, Clock, Trash2, Award, Calendar } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useReactToPrint } from 'react-to-print'
 import PerformanceMonitor from './PerformanceMonitor'
 import AdminManager from './AdminManager'
+import ItemPointsManager from './ItemPointsManager'
+import { getAllCVsWithItemPoints, getAllCVsWithCategorizedScores, getAllUsersWithCVStatus, filterCVByYear, calculateFilteredPoints, getCVItemsWithPoints } from '../utils/itemPointsManager'
 
 const AdminView = () => {
   const [cvs, setCvs] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('')
+  const [yearFilter, setYearFilter] = useState({ from: '', to: '' })
+  const [filteredPoints, setFilteredPoints] = useState({})
+  const [calculatingFilteredPoints, setCalculatingFilteredPoints] = useState(false)
   const [selectedCV, setSelectedCV] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [showHistoryModal, setShowHistoryModal] = useState(false)
@@ -25,6 +31,14 @@ const AdminView = () => {
   const loadAllCVs = useCallback(async (page = 1, search = '') => {
     setLoading(true)
     try {
+      // Load CVs with item points data
+      const cvsWithPointsData = await getAllCVsWithItemPoints()
+      setCvsWithItemPoints(cvsWithPointsData)
+      
+      // Load CVs with categorized scores data
+      const cvsWithCategorizedData = await getAllCVsWithCategorizedScores()
+      setCvsWithCategorizedScores(cvsWithCategorizedData)
+
       let query = supabase
         .from('cvs')
         .select('*', { count: 'exact' })
@@ -54,9 +68,19 @@ const AdminView = () => {
     }
   }, [pageSize])
 
+  // Debounced search effect
   useEffect(() => {
-    loadAllCVs(1, searchTerm)
-  }, [searchTerm, loadAllCVs])
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm)
+    }, 500) // Wait 500ms after user stops typing
+
+    return () => clearTimeout(timer)
+  }, [searchTerm])
+
+  useEffect(() => {
+    // Reset to page 1 when search term changes
+    loadAllCVs(1, debouncedSearchTerm)
+  }, [debouncedSearchTerm, loadAllCVs])
 
   const handlePageChange = (page) => {
     loadAllCVs(page, searchTerm)
@@ -64,10 +88,12 @@ const AdminView = () => {
 
   const handleSearch = (term) => {
     setSearchTerm(term)
-    setCurrentPage(1) // Reset to first page when searching
+    // Don't reset page here - it will be reset when debounced search triggers
   }
 
   const [cvToPrint, setCvToPrint] = useState(null)
+  const [cvsWithItemPoints, setCvsWithItemPoints] = useState([])
+  const [cvsWithCategorizedScores, setCvsWithCategorizedScores] = useState([])
 
   const handlePrint = useReactToPrint({
     content: () => printRef.current,
@@ -126,6 +152,94 @@ const AdminView = () => {
     setCvHistory([])
   }
 
+  const handleDeleteCV = async (cv) => {
+    if (!window.confirm(`Are you sure you want to delete ${cv.full_name}'s CV? This action cannot be undone.`)) {
+      return
+    }
+
+    try {
+      // Delete CV history first (due to foreign key constraint)
+      const { error: historyError } = await supabase
+        .from('cv_history')
+        .delete()
+        .eq('cv_id', cv.id)
+
+      if (historyError) {
+        toast.error('Error deleting CV history')
+        return
+      }
+
+      // Delete the CV
+      const { error: cvError } = await supabase
+        .from('cvs')
+        .delete()
+        .eq('id', cv.id)
+
+      if (cvError) {
+        toast.error('Error deleting CV')
+        return
+      }
+
+      toast.success(`${cv.full_name}'s CV deleted successfully`)
+      
+      // Refresh the CV list
+      loadAllCVs(currentPage, searchTerm)
+      
+    } catch (error) {
+      toast.error('Error deleting CV: ' + error.message)
+    }
+  }
+
+  const handlePointsUpdate = async () => {
+    // Refresh points data
+    try {
+      const pointsData = await getAllCVsWithItemPoints();
+      setCvsWithItemPoints(pointsData);
+      
+      // Refresh categorized scores data
+      const categorizedData = await getAllCVsWithCategorizedScores();
+      setCvsWithCategorizedScores(categorizedData);
+    } catch (error) {
+      console.error('Error refreshing points data:', error);
+    }
+    // Also refresh CVs to ensure everything is up to date
+    loadAllCVs(currentPage, debouncedSearchTerm);
+  }
+
+  // Calculate filtered points for all CVs
+  const calculateFilteredPointsForAllCVs = useCallback(async () => {
+    if (!yearFilter.from && !yearFilter.to) {
+      setFilteredPoints({});
+      setCalculatingFilteredPoints(false);
+      return;
+    }
+
+    setCalculatingFilteredPoints(true);
+    try {
+      const newFilteredPoints = {};
+      
+      for (const cv of cvs) {
+        // Get item points for this CV
+        const itemPoints = await getCVItemsWithPoints(cv.id);
+        
+        // Calculate filtered points
+        const points = calculateFilteredPoints(cv, itemPoints, yearFilter);
+        newFilteredPoints[cv.id] = points;
+      }
+      
+      setFilteredPoints(newFilteredPoints);
+    } catch (error) {
+      console.error('Error calculating filtered points:', error);
+    } finally {
+      setCalculatingFilteredPoints(false);
+    }
+  }, [cvs, yearFilter]);
+
+  // Recalculate filtered points when year filter changes
+  useEffect(() => {
+    calculateFilteredPointsForAllCVs();
+  }, [yearFilter, calculateFilteredPointsForAllCVs]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -154,17 +268,159 @@ const AdminView = () => {
               <AdminManager />
             </div>
 
-            {/* Search */}
-            <div className="mb-6">
+            {/* Points System Instructions */}
+            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center gap-2 mb-3">
+                <Award className="h-5 w-5 text-blue-600" />
+                <h3 className="text-lg font-semibold text-blue-800">Points Management Guide</h3>
+              </div>
+              
+              <div className="space-y-4 text-sm text-blue-700">
+                <div>
+                  <h4 className="font-medium text-blue-800 mb-2">🎯 How to Add/Subtract Points:</h4>
+                  <ol className="list-decimal list-inside space-y-1 ml-2">
+                    <li>Click the <strong>settings icon (⚙️)</strong> next to any CV's points display</li>
+                    <li>Click <strong>"Manage Points"</strong> to open the points management modal</li>
+                    <li>Select an item from the dropdown (education, publications, etc.)</li>
+                    <li>Enter the number of points and optional reason</li>
+                    <li>Choose <strong>"Add Points"</strong> or <strong>"Subtract Points"</strong></li>
+                    <li>Click the action button to apply the changes</li>
+                  </ol>
+                </div>
+
+                <div>
+                  <h4 className="font-medium text-blue-800 mb-2">⚡ Batch Mode (Recommended for Multiple Changes):</h4>
+                  <ol className="list-decimal list-inside space-y-1 ml-2">
+                    <li>Enable <strong>"Batch Mode"</strong> in the dropdown</li>
+                    <li>Open the points management modal</li>
+                    <li>Select items and click <strong>"Add to Queue"</strong> for each change</li>
+                    <li>Review all pending changes in the queue</li>
+                    <li>Click <strong>"Apply All Changes"</strong> to process everything at once</li>
+                    <li>Use <strong>"Remove"</strong> to delete individual changes from the queue</li>
+                  </ol>
+                </div>
+
+                <div>
+                  <h4 className="font-medium text-blue-800 mb-2">📊 Understanding the Points System:</h4>
+                  <ul className="list-disc list-inside space-y-1 ml-2">
+                    <li><strong>Individual Items:</strong> Each CV item (publication, education entry, etc.) can have points</li>
+                    <li><strong>Total Points:</strong> Sum of all item points displayed next to the CV name</li>
+                    <li><strong>Intellectual Score:</strong> Research Publications + Books + Education + Conference Presentations (Education always included)</li>
+                    <li><strong>Professional Score:</strong> Teaching + Professional Service</li>
+                    <li><strong>History:</strong> Click the history icon (📜) to view all point changes</li>
+                    <li><strong>Real-time Updates:</strong> Points update immediately after applying changes</li>
+                  </ul>
+                </div>
+
+                <div className="bg-blue-100 p-3 rounded border border-blue-300">
+                  <h4 className="font-medium text-blue-800 mb-1">💡 Pro Tips:</h4>
+                  <ul className="list-disc list-inside space-y-1 text-xs">
+                    <li>Use <strong>Batch Mode</strong> when adding points to multiple items</li>
+                    <li>Add <strong>reasons</strong> to track why points were awarded/deducted</li>
+                    <li>Check the <strong>history</strong> to see all point changes over time</li>
+                    <li>Points are <strong>cumulative</strong> - they add up across all CV items</li>
+                  </ul>
+                </div>
+
+                <div className="bg-gray-50 p-4 rounded border border-gray-200">
+                  <h4 className="font-medium text-gray-800 mb-2">📊 Scoring Categories Explained:</h4>
+                  <div className="space-y-3 text-sm">
+                    <div>
+                      <h5 className="font-semibold text-blue-700 mb-1">🧠 Intellectual Score (Blue)</h5>
+                      <p className="text-gray-600 mb-2">Measures academic and research achievements:</p>
+                      <ul className="list-disc list-inside space-y-1 ml-2 text-xs text-gray-600">
+                        <li><strong>Research Publications:</strong> Journal articles, papers with index (SSCI, SCOPUS, KCI, Other)</li>
+                        <li><strong>Books:</strong> Published books, monographs, textbooks</li>
+                        <li><strong>Education:</strong> Degrees, certifications, academic qualifications (always included regardless of year filter)</li>
+                        <li><strong>Conference Presentations:</strong> Oral presentations, posters, conference papers</li>
+                      </ul>
+                    </div>
+                    
+                    <div>
+                      <h5 className="font-semibold text-green-700 mb-1">👔 Professional Score (Green)</h5>
+                      <p className="text-gray-600 mb-2">Measures teaching and service contributions:</p>
+                      <ul className="list-disc list-inside space-y-1 ml-2 text-xs text-gray-600">
+                        <li><strong>Teaching Experience:</strong> Courses taught, student supervision, curriculum development</li>
+                        <li><strong>Professional Service:</strong> Committee work, administrative roles, community service</li>
+                      </ul>
+                    </div>
+                    
+                    <div>
+                      <h5 className="font-semibold text-yellow-700 mb-1">🏆 Total Points (Yellow)</h5>
+                      <p className="text-gray-600 mb-2">Combined score of all achievements:</p>
+                      <ul className="list-disc list-inside space-y-1 ml-2 text-xs text-gray-600">
+                        <li><strong>Sum of All:</strong> Intellectual Score + Professional Score</li>
+                        <li><strong>Overall Assessment:</strong> Complete academic profile evaluation</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Search and Year Filter */}
+            <div className="mb-6 space-y-4">
+              {/* Search */}
               <div className="relative">
                 <Search className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-                                 <input
-                   type="text"
-                   placeholder="Search by name or email..."
-                   value={searchTerm}
-                   onChange={(e) => handleSearch(e.target.value)}
-                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                 />
+                <input
+                  type="text"
+                  placeholder="Search by name or email..."
+                  value={searchTerm}
+                  onChange={(e) => handleSearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+              
+              {/* Year Filter */}
+              <div className="bg-white p-4 rounded-lg border border-gray-200">
+                <div className="flex items-center gap-2 mb-3">
+                  <Calendar className="h-5 w-5 text-gray-600" />
+                  <h3 className="font-medium text-gray-800">Year Filter</h3>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium text-gray-700">From:</label>
+                    <input
+                      type="number"
+                      placeholder="2020"
+                      value={yearFilter.from || ''}
+                      onChange={(e) => setYearFilter(prev => ({ ...prev, from: e.target.value }))}
+                      className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium text-gray-700">To:</label>
+                    <input
+                      type="number"
+                      placeholder="2024"
+                      value={yearFilter.to || ''}
+                      onChange={(e) => setYearFilter(prev => ({ ...prev, to: e.target.value }))}
+                      className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+                  <button
+                    onClick={() => setYearFilter({ from: '', to: '' })}
+                    className="px-3 py-1 text-sm bg-gray-100 text-gray-600 rounded hover:bg-gray-200"
+                  >
+                    Clear Filter
+                  </button>
+                  <div className="text-xs text-gray-500">
+                    {yearFilter.from && yearFilter.to ? 
+                      `Showing items from ${yearFilter.from} to ${yearFilter.to} (including overlapping date ranges). Education always included.` :
+                      yearFilter.from ? 
+                        `Showing items from ${yearFilter.from} onwards. Education always included.` :
+                      yearFilter.to ? 
+                        `Showing items up to ${yearFilter.to}. Education always included.` :
+                        'Showing all years'
+                    }
+                    {calculatingFilteredPoints && (
+                      <div className="mt-1 text-blue-600">
+                        🔄 Recalculating points...
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -182,52 +438,112 @@ const AdminView = () => {
                    <div className="text-sm text-gray-600 mb-4">
                      Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalCount)} of {totalCount} CVs
                    </div>
-                                      {cvs.map((cv) => (
-                     <div key={cv.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                       <div className="flex justify-between items-start">
-                         <div className="flex-1">
-                           <h3 className="text-lg font-semibold text-gray-900">{cv.full_name || 'Unnamed'}</h3>
-                           <p className="text-gray-600">{cv.email}</p>
-                           <p className="text-gray-500 text-sm">
-                             Last updated: {new Date(cv.updated_at).toLocaleDateString()}
-                           </p>
-                           <div className="mt-2 flex flex-wrap gap-2">
-                             {cv.education?.length > 0 && (
-                               <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                                 {cv.education.length} Education
-                               </span>
-                             )}
-                             {cv.academic_employment?.length > 0 && (
-                               <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
-                                 {cv.academic_employment.length} Positions
-                               </span>
-                             )}
-                             {cv.publications_research?.length > 0 && (
-                               <span className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full">
-                                 {cv.publications_research.length} Publications
-                               </span>
-                             )}
+                                      {cvs.map((cv) => {
+                     // Apply year filter to CV data
+                     const filteredCV = filterCVByYear(cv, yearFilter)
+                     
+                     // Find the corresponding CV with item points data
+                     const cvWithPoints = cvsWithItemPoints.find(c => c.cv_id === cv.id)
+                     const cvWithCategorizedScores = cvsWithCategorizedScores.find(c => c.cv_id === cv.id)
+                     
+                     // Get filtered points if year filter is active
+                     const filteredPointsData = filteredPoints[cv.id]
+                     
+                     // Use filtered CV for display
+                     const displayCV = filteredCV
+                     
+                     return (
+                       <div key={cv.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                         <div className="flex justify-between items-start">
+                           <div className="flex-1">
+                             <div className="flex items-center gap-3 mb-2">
+                               <h3 className="text-lg font-semibold text-gray-900">{cv.full_name || 'Unnamed'}</h3>
+                               {/* Total Points Display */}
+                               {(filteredPointsData || cvWithPoints) && (
+                                 <div className="flex items-center gap-2">
+                                   <Award className="h-4 w-4 text-yellow-500" />
+                                   <span className="font-semibold text-gray-700">
+                                     {filteredPointsData ? filteredPointsData.total_points : (cvWithPoints?.total_points || 0)} pts
+                                   </span>
+                                 </div>
+                               )}
+                               
+                               {/* Categorized Scores Display */}
+                               {(filteredPointsData || cvWithCategorizedScores) && (
+                                 <div className="flex items-center gap-4 text-sm">
+                                   <div className="flex items-center gap-1">
+                                     <span className="text-blue-600 font-medium">Intellectual:</span>
+                                     <span className="font-semibold text-blue-700">
+                                       {filteredPointsData ? filteredPointsData.intellectual_score : (cvWithCategorizedScores?.intellectual_score || 0)} pts
+                                     </span>
+                                   </div>
+                                   <div className="flex items-center gap-1">
+                                     <span className="text-green-600 font-medium">Professional:</span>
+                                     <span className="font-semibold text-green-700">
+                                       {filteredPointsData ? filteredPointsData.professional_score : (cvWithCategorizedScores?.professional_score || 0)} pts
+                                     </span>
+                                   </div>
+                                 </div>
+                               )}
+                             </div>
+                             <p className="text-gray-600">{cv.email}</p>
+                             <p className="text-gray-500 text-sm">
+                               Last updated: {new Date(cv.updated_at).toLocaleDateString()}
+                             </p>
+                             <div className="mt-2 flex flex-wrap gap-2">
+                               {displayCV.education?.length > 0 && (
+                                 <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                                   {displayCV.education.length} Education
+                                 </span>
+                               )}
+                               {displayCV.academic_employment?.length > 0 && (
+                                 <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                                   {displayCV.academic_employment.length} Positions
+                                 </span>
+                               )}
+                               {displayCV.publications_research?.length > 0 && (
+                                 <span className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full">
+                                   {displayCV.publications_research.length} Publications
+                                 </span>
+                               )}
+                             </div>
+                           </div>
+                           <div className="flex space-x-2 ml-4">
+                             <button
+                               onClick={() => openPrintModal(cv)}
+                               className="flex items-center px-3 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
+                             >
+                               <Eye className="h-4 w-4 mr-1" />
+                               View
+                             </button>
+                             <button
+                               onClick={() => openHistoryModal(cv)}
+                               className="flex items-center px-3 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700"
+                             >
+                               <History className="h-4 w-4 mr-1" />
+                               History
+                             </button>
+                             <button
+                               onClick={() => handleDeleteCV(cv)}
+                               className="flex items-center px-3 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                               title="Delete CV"
+                             >
+                               <Trash2 className="h-4 w-4 mr-1" />
+                               Delete
+                             </button>
                            </div>
                          </div>
-                         <div className="flex space-x-2 ml-4">
-                           <button
-                             onClick={() => openPrintModal(cv)}
-                             className="flex items-center px-3 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
-                           >
-                             <Eye className="h-4 w-4 mr-1" />
-                             View
-                           </button>
-                           <button
-                             onClick={() => openHistoryModal(cv)}
-                             className="flex items-center px-3 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700"
-                           >
-                             <History className="h-4 w-4 mr-1" />
-                             History
-                           </button>
+                         
+                         {/* Item Points Manager */}
+                         <div className="mt-3 pt-3 border-t border-gray-200">
+                           <ItemPointsManager 
+                             cv={displayCV}
+                             onPointsUpdate={handlePointsUpdate}
+                           />
                          </div>
                        </div>
-                     </div>
-                   ))}
+                     )
+                   })}
                                   </>
                )}
 
@@ -283,9 +599,9 @@ const AdminView = () => {
               </div>
             </div>
             <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
-              <div ref={printRef}>
-                <CVPrintView cv={selectedCV} />
-              </div>
+                                     <div ref={printRef}>
+                         <CVPrintView cv={selectedCV} yearFilter={yearFilter} />
+                       </div>
             </div>
           </div>
                  </div>
@@ -331,7 +647,7 @@ const AdminView = () => {
                          </div>
                        </div>
                        <div ref={historyPrintRef}>
-                         <CVPrintView cv={cvToPrint || version} />
+                         <CVPrintView cv={cvToPrint || version} yearFilter={yearFilter} />
                        </div>
                      </div>
                    ))}
@@ -346,24 +662,28 @@ const AdminView = () => {
  }
 
 // CV Print View Component
-const CVPrintView = ({ cv }) => {
+const CVPrintView = ({ cv, yearFilter = { from: '', to: '' } }) => {
+  // Apply year filter to CV data for printing
+  const filteredCV = filterCVByYear(cv, yearFilter)
   return (
-    <div className="print-content space-y-6 px-4 py-2">
+    <div className="print-content space-y-6">
       {/* Header */}
       <div className="text-center border-b-2 border-gray-300 pb-4">
-        <h1 className="text-3xl font-bold text-gray-900">{cv.full_name}</h1>
+        <h1 className="text-3xl font-bold text-gray-900">{filteredCV.full_name}</h1>
         <div className="mt-2 space-y-1 text-gray-600">
-          {cv.phone && <p>{cv.phone}</p>}
-          {cv.email && <p>{cv.email}</p>}
-          {cv.address && <p>{cv.address}</p>}
+          {filteredCV.phone && <p>{filteredCV.phone}</p>}
+          {filteredCV.email && <p>{filteredCV.email}</p>}
+          {filteredCV.address && <p>{filteredCV.address}</p>}
         </div>
       </div>
 
+
+
       {/* Education */}
-      {cv.education && cv.education.length > 0 && (
-        <div className="mb-6">
+      {filteredCV.education && filteredCV.education.length > 0 && (
+        <div>
           <h2 className="text-xl font-bold text-gray-900 border-b border-gray-300 pb-2 mb-4">Education</h2>
-          {cv.education.map((edu, index) => (
+          {filteredCV.education.map((edu, index) => (
             <div key={index} className="mb-4">
               <div className="flex justify-between items-start">
                 <div>
@@ -379,10 +699,10 @@ const CVPrintView = ({ cv }) => {
       )}
 
       {/* Academic Employment */}
-      {cv.academic_employment && cv.academic_employment.length > 0 && (
-        <div className="mb-6">
+      {filteredCV.academic_employment && filteredCV.academic_employment.length > 0 && (
+        <div>
           <h2 className="text-xl font-bold text-gray-900 border-b border-gray-300 pb-2 mb-4">Academic Employment</h2>
-          {cv.academic_employment.map((job, index) => (
+          {filteredCV.academic_employment.map((job, index) => (
             <div key={index} className="mb-4">
               <div className="flex justify-between items-start">
                 <div>
@@ -399,10 +719,10 @@ const CVPrintView = ({ cv }) => {
       )}
 
       {/* Teaching Experience */}
-      {cv.teaching && cv.teaching.length > 0 && (
-        <div className="mb-6">
+      {filteredCV.teaching && filteredCV.teaching.length > 0 && (
+        <div>
           <h2 className="text-xl font-bold text-gray-900 border-b border-gray-300 pb-2 mb-4">Teaching Experience</h2>
-          {cv.teaching.map((course, index) => (
+          {filteredCV.teaching.map((course, index) => (
             <div key={index} className="mb-4">
               <div className="flex justify-between items-start">
                 <div>
@@ -418,14 +738,15 @@ const CVPrintView = ({ cv }) => {
       )}
 
       {/* Research Publications */}
-      {cv.publications_research && cv.publications_research.length > 0 && (
-        <div className="mb-6">
+      {filteredCV.publications_research && filteredCV.publications_research.length > 0 && (
+        <div>
           <h2 className="text-xl font-bold text-gray-900 border-b border-gray-300 pb-2 mb-4">Research Publications</h2>
-          {cv.publications_research.map((pub, index) => (
+          {filteredCV.publications_research.map((pub, index) => (
             <div key={index} className="mb-4">
               <p className="font-semibold">{pub.title}</p>
               <p className="text-gray-600">{pub.authors}</p>
               <p className="text-gray-500">{pub.journal}, {pub.year}</p>
+              {pub.index && <p className="text-gray-400 text-sm">Index: {pub.index}</p>}
               {pub.doi && <p className="text-gray-400 text-sm">DOI: {pub.doi}</p>}
             </div>
           ))}
@@ -433,10 +754,10 @@ const CVPrintView = ({ cv }) => {
       )}
 
       {/* Books */}
-      {cv.publications_books && cv.publications_books.length > 0 && (
-        <div className="mb-6">
+      {filteredCV.publications_books && filteredCV.publications_books.length > 0 && (
+        <div>
           <h2 className="text-xl font-bold text-gray-900 border-b border-gray-300 pb-2 mb-4">Books</h2>
-          {cv.publications_books.map((book, index) => (
+          {filteredCV.publications_books.map((book, index) => (
             <div key={index} className="mb-4">
               <p className="font-semibold">{book.title}</p>
               <p className="text-gray-600">{book.authors}</p>
@@ -448,10 +769,10 @@ const CVPrintView = ({ cv }) => {
       )}
 
       {/* Conference Presentations */}
-      {cv.conference_presentations && cv.conference_presentations.length > 0 && (
-        <div className="mb-6">
+      {filteredCV.conference_presentations && filteredCV.conference_presentations.length > 0 && (
+        <div>
           <h2 className="text-xl font-bold text-gray-900 border-b border-gray-300 pb-2 mb-4">Conference Presentations</h2>
-          {cv.conference_presentations.map((presentation, index) => (
+          {filteredCV.conference_presentations.map((presentation, index) => (
             <div key={index} className="mb-4">
               <p className="font-semibold">{presentation.title}</p>
               <p className="text-gray-600">{presentation.conference}</p>
@@ -463,10 +784,10 @@ const CVPrintView = ({ cv }) => {
       )}
 
       {/* Professional Service */}
-      {cv.professional_service && cv.professional_service.length > 0 && (
-        <div className="mb-6">
+      {filteredCV.professional_service && filteredCV.professional_service.length > 0 && (
+        <div>
           <h2 className="text-xl font-bold text-gray-900 border-b border-gray-300 pb-2 mb-4">Professional Service</h2>
-          {cv.professional_service.map((service, index) => (
+          {filteredCV.professional_service.map((service, index) => (
             <div key={index} className="mb-4">
               <div className="flex justify-between items-start">
                 <div>

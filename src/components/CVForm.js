@@ -17,7 +17,7 @@ const CVForm = () => {
     education: [{ degree: '', institution: '', year: '', field: '' }],
     academic_employment: [{ position: '', institution: '', start_date: '', end_date: '', current: false }],
     teaching: [{ course: '', institution: '', year: '', description: '' }],
-    publications_research: [{ title: '', journal: '', year: '', authors: '', doi: '' }],
+    publications_research: [{ title: '', journal: '', year: '', authors: '', doi: '', index: '' }],
     publications_books: [{ title: '', publisher: '', year: '', authors: '', isbn: '' }],
     conference_presentations: [{ title: '', conference: '', year: '', location: '', type: '' }],
     professional_service: [{ role: '', organization: '', year: '', description: '' }]
@@ -48,7 +48,7 @@ const CVForm = () => {
           education: data.education || [{ degree: '', institution: '', year: '', field: '' }],
           academic_employment: data.academic_employment || [{ position: '', institution: '', start_date: '', end_date: '', current: false }],
           teaching: data.teaching || [{ course: '', institution: '', year: '', description: '' }],
-          publications_research: data.publications_research || [{ title: '', journal: '', year: '', authors: '', doi: '' }],
+          publications_research: data.publications_research || [{ title: '', journal: '', year: '', authors: '', doi: '', index: '' }],
           publications_books: data.publications_books || [{ title: '', publisher: '', year: '', authors: '', isbn: '' }],
           conference_presentations: data.conference_presentations || [{ title: '', conference: '', year: '', location: '', type: '' }],
           professional_service: data.professional_service || [{ role: '', organization: '', year: '', description: '' }]
@@ -98,6 +98,7 @@ const CVForm = () => {
           .insert({
             cv_id: cvId,
             user_id: user.id,
+            email: user.email, // Use current user's email
             ...formData,
             version_number: nextVersion
           })
@@ -109,6 +110,7 @@ const CVForm = () => {
         .upsert({
           id: cvId, // Use existing ID if available
           user_id: user.id,
+          email: user.email, // Use current user's email
           ...formData,
           updated_at: new Date().toISOString()
         })
@@ -124,6 +126,7 @@ const CVForm = () => {
             .insert({
               cv_id: data[0].id,
               user_id: user.id,
+              email: user.email, // Use current user's email
               ...formData,
               version_number: 1
             })
@@ -151,7 +154,7 @@ const CVForm = () => {
       education: { degree: '', institution: '', year: '', field: '' },
       academic_employment: { position: '', institution: '', start_date: '', end_date: '', current: false },
       teaching: { course: '', institution: '', year: '', description: '' },
-      publications_research: { title: '', journal: '', year: '', authors: '', doi: '' },
+      publications_research: { title: '', journal: '', year: '', authors: '', doi: '', index: '' },
       publications_books: { title: '', publisher: '', year: '', authors: '', isbn: '' },
       conference_presentations: { title: '', conference: '', year: '', location: '', type: '' },
       professional_service: { role: '', organization: '', year: '', description: '' }
@@ -484,6 +487,17 @@ const CVForm = () => {
                       onChange={(e) => updateArrayField('publications_research', index, 'doi', e.target.value)}
                       className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                     />
+                    <select
+                      value={pub.index}
+                      onChange={(e) => updateArrayField('publications_research', index, 'index', e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    >
+                      <option value="">Select Index</option>
+                      <option value="SSCI">SSCI</option>
+                      <option value="SCOPUS">SCOPUS</option>
+                      <option value="KCI">KCI</option>
+                      <option value="Other">Other</option>
+                    </select>
                   </div>
                 </div>
               ))}

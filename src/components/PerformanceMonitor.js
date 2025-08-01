@@ -104,7 +104,7 @@ const PerformanceMonitor = () => {
         <ul className="text-sm text-gray-600 space-y-1">
           <li>• Pagination loads 20 CVs per page for optimal performance</li>
           <li>• Search uses database indexes for fast results</li>
-          <li>• CV history is limited to 10 versions per CV to manage storage</li>
+          <li>• CV history stores unlimited versions for complete audit trail</li>
           <li>• Partial indexes optimize queries for recent data</li>
         </ul>
       </div>
