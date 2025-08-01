@@ -33,10 +33,25 @@ const Navigation = () => {
   }, [user])
 
   const handleSignOut = async () => {
+    console.log('Navigation: Sign out button clicked')
+    console.log('Current user:', user?.email)
+    console.log('Environment check:', {
+      supabaseUrl: process.env.REACT_APP_SUPABASE_URL ? 'Set' : 'Missing',
+      supabaseKey: process.env.REACT_APP_SUPABASE_ANON_KEY ? 'Set' : 'Missing',
+      nodeEnv: process.env.NODE_ENV
+    })
+    
     try {
-      await signOut()
+      const { error } = await signOut()
+      if (error) {
+        console.error('Navigation: Sign out error:', error)
+        alert('Sign out failed: ' + error.message)
+      } else {
+        console.log('Navigation: Sign out successful')
+      }
     } catch (error) {
-      console.error('Error signing out:', error)
+      console.error('Navigation: Sign out exception:', error)
+      alert('Sign out failed: ' + error.message)
     }
   }
 
