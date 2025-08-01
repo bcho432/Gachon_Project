@@ -1,46 +1,101 @@
-import React, { useState } from 'react'
-import { ADMIN_USER_IDS, addAdmin, removeAdmin } from '../utils/adminConfig'
-import { UserPlus, UserMinus, Users } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { FALLBACK_ADMIN_USER_IDS, addAdmin, removeAdmin, getAllAdmins } from '../utils/adminConfig'
+import { UserPlus, UserMinus, Users, RefreshCw } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const AdminManager = () => {
   const [newAdminId, setNewAdminId] = useState('')
-  const [adminList, setAdminList] = useState(ADMIN_USER_IDS)
+  const [adminList, setAdminList] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
 
-  const handleAddAdmin = () => {
+  // Load admins from database
+  const loadAdmins = async () => {
+    setLoading(true)
+    try {
+      const admins = await getAllAdmins()
+      setAdminList(admins)
+    } catch (error) {
+      console.error('Error loading admins:', error)
+      toast.error('Failed to load admin list')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Load admins on component mount
+  useEffect(() => {
+    loadAdmins()
+  }, [])
+
+  const handleAddAdmin = async () => {
     if (!newAdminId.trim()) {
       toast.error('Please enter a user ID')
       return
     }
 
-    if (adminList.includes(newAdminId.trim())) {
+    // Check if already an admin
+    const isAlreadyAdmin = adminList.some(admin => admin.user_id === newAdminId.trim())
+    if (isAlreadyAdmin) {
       toast.error('User is already an admin')
       return
     }
 
-    addAdmin(newAdminId.trim())
-    setAdminList([...ADMIN_USER_IDS])
-    setNewAdminId('')
-    toast.success('Admin added successfully!')
+    setLoading(true)
+    try {
+      await addAdmin(newAdminId.trim())
+      setNewAdminId('')
+      await loadAdmins() // Reload the list
+      toast.success('Admin added successfully!')
+    } catch (error) {
+      console.error('Error adding admin:', error)
+      toast.error('Failed to add admin. Please check the user ID.')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleRemoveAdmin = (userId) => {
+  const handleRemoveAdmin = async (userId) => {
     if (adminList.length <= 1) {
       toast.error('Cannot remove the last admin')
       return
     }
 
-    removeAdmin(userId)
-    setAdminList([...ADMIN_USER_IDS])
-    toast.success('Admin removed successfully!')
+    setLoading(true)
+    try {
+      await removeAdmin(userId)
+      await loadAdmins() // Reload the list
+      toast.success('Admin removed successfully!')
+    } catch (error) {
+      console.error('Error removing admin:', error)
+      toast.error('Failed to remove admin')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    await loadAdmins()
+    setRefreshing(false)
   }
 
   return (
     <div className="bg-white rounded-lg shadow p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-        <Users className="h-5 w-5 mr-2" />
-        Admin Management
-      </h3>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+          <Users className="h-5 w-5 mr-2" />
+          Admin Management
+        </h3>
+        <button
+          onClick={handleRefresh}
+          disabled={refreshing}
+          className="flex items-center px-3 py-1 text-sm bg-gray-100 text-gray-600 rounded hover:bg-gray-200 disabled:opacity-50"
+        >
+          <RefreshCw className={`h-4 w-4 mr-1 ${refreshing ? 'animate-spin' : ''}`} />
+          Refresh
+        </button>
+      </div>
 
       {/* Add New Admin */}
       <div className="mb-6">
@@ -55,10 +110,11 @@ const AdminManager = () => {
           />
           <button
             onClick={handleAddAdmin}
-            className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+            disabled={loading}
+            className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
           >
             <UserPlus className="h-4 w-4 mr-1" />
-            Add
+            {loading ? 'Adding...' : 'Add'}
           </button>
         </div>
         <p className="text-xs text-gray-500 mt-1">
@@ -68,37 +124,52 @@ const AdminManager = () => {
 
       {/* Current Admins */}
       <div>
-        <h4 className="text-sm font-medium text-gray-900 mb-2">Current Admins</h4>
-        <div className="space-y-2">
-          {adminList.map((userId, index) => (
-            <div key={userId} className="flex justify-between items-center p-3 bg-gray-50 rounded-md">
-              <div>
-                <p className="text-sm font-medium text-gray-900">{userId}</p>
-                <p className="text-xs text-gray-500">
-                  {index === 0 ? 'Primary Admin' : 'Additional Admin'}
-                </p>
+        <h4 className="text-sm font-medium text-gray-900 mb-2">
+          Current Admins ({adminList.length})
+        </h4>
+        {loading ? (
+          <div className="text-center py-4">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600 mx-auto"></div>
+            <p className="text-sm text-gray-500 mt-2">Loading admins...</p>
+          </div>
+        ) : adminList.length === 0 ? (
+          <div className="text-center py-4 text-gray-500">
+            <p>No admins found. Add the first admin above.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {adminList.map((admin, index) => (
+              <div key={admin.user_id} className="flex justify-between items-center p-3 bg-gray-50 rounded-md">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{admin.user_id}</p>
+                  <p className="text-xs text-gray-500">{admin.email}</p>
+                  <p className="text-xs text-gray-400">
+                    {index === 0 ? 'Primary Admin' : 'Additional Admin'} • {admin.admin_level}
+                  </p>
+                </div>
+                {adminList.length > 1 && (
+                  <button
+                    onClick={() => handleRemoveAdmin(admin.user_id)}
+                    disabled={loading}
+                    className="flex items-center px-2 py-1 text-red-600 hover:text-red-800 text-sm disabled:opacity-50"
+                  >
+                    <UserMinus className="h-4 w-4 mr-1" />
+                    Remove
+                  </button>
+                )}
               </div>
-              {adminList.length > 1 && (
-                <button
-                  onClick={() => handleRemoveAdmin(userId)}
-                  className="flex items-center px-2 py-1 text-red-600 hover:text-red-800 text-sm"
-                >
-                  <UserMinus className="h-4 w-4 mr-1" />
-                  Remove
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="mt-6 pt-4 border-t border-gray-200">
         <h4 className="text-sm font-medium text-gray-900 mb-2">Important Notes:</h4>
         <ul className="text-sm text-gray-600 space-y-1">
-          <li>• Changes require a page refresh to take effect</li>
+          <li>• Admin changes are now persistent and stored in the database</li>
           <li>• At least one admin must remain in the system</li>
-          <li>• You'll also need to update the SQL policies in Supabase</li>
-          <li>• Admin changes are stored in the browser (not persistent)</li>
+          <li>• Use the Refresh button to reload the admin list</li>
+          <li>• Admin status persists across page refreshes</li>
         </ul>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
@@ -11,6 +11,25 @@ import { checkIsAdmin } from './utils/adminConfig'
 // Protected Route Component
 const ProtectedRoute = ({ children, adminOnly = false }) => {
   const { user } = useAuth()
+  const [isAdmin, setIsAdmin] = useState(null)
+  const [loading, setLoading] = useState(adminOnly)
+  
+  useEffect(() => {
+    if (adminOnly && user) {
+      const checkAdmin = async () => {
+        try {
+          const adminStatus = await checkIsAdmin(user.id)
+          setIsAdmin(adminStatus)
+        } catch (error) {
+          console.error('Error checking admin status:', error)
+          setIsAdmin(false)
+        } finally {
+          setLoading(false)
+        }
+      }
+      checkAdmin()
+    }
+  }, [user, adminOnly])
   
   if (!user) {
     return <Navigate to="/auth" replace />
@@ -18,7 +37,15 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
 
   // For admin routes, check if user is admin
   if (adminOnly) {
-    if (!checkIsAdmin(user.id)) {
+    if (loading) {
+      return (
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+        </div>
+      )
+    }
+    
+    if (!isAdmin) {
       return <Navigate to="/" replace />
     }
   }

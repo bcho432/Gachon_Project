@@ -1,18 +1,35 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { LogOut, User, ChevronDown } from 'lucide-react'
+import { LogOut, User, ChevronDown, Shield } from 'lucide-react'
 import { checkIsAdmin } from '../utils/adminConfig'
 
 const Navigation = () => {
   const { user, signOut } = useAuth()
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [adminLoading, setAdminLoading] = useState(true)
 
   // Check if user is admin
-  React.useEffect(() => {
-    if (user) {
-      setIsAdmin(checkIsAdmin(user.id))
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      if (user) {
+        setAdminLoading(true)
+        try {
+          const adminStatus = await checkIsAdmin(user.id)
+          setIsAdmin(adminStatus)
+        } catch (error) {
+          console.error('Error checking admin status:', error)
+          setIsAdmin(false)
+        } finally {
+          setAdminLoading(false)
+        }
+      } else {
+        setIsAdmin(false)
+        setAdminLoading(false)
+      }
     }
+
+    checkAdminStatus()
   }, [user])
 
   const handleSignOut = async () => {
@@ -33,12 +50,13 @@ const Navigation = () => {
 
           {user && (
             <div className="flex items-center space-x-4">
-              {/* Admin Link */}
-              {isAdmin && (
+              {/* Admin Link - Only show for admin users */}
+              {!adminLoading && isAdmin && (
                 <a
                   href="/admin"
-                  className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
+                  className="flex items-center text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium transition-colors"
                 >
+                  <Shield className="h-4 w-4 mr-1" />
                   Admin Dashboard
                 </a>
               )}
@@ -55,7 +73,10 @@ const Navigation = () => {
                 </button>
 
                 {showUserMenu && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200">
+                    <div className="px-4 py-2 text-xs text-gray-500 border-b border-gray-100">
+                      {isAdmin ? 'Admin User' : 'Regular User'}
+                    </div>
                     <button
                       onClick={handleSignOut}
                       className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
