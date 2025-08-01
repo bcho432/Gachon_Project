@@ -642,31 +642,35 @@ export const getUserItemPoints = async (userId) => {
 // Calculate total points for a user from item_points
 export const calculateUserTotalPoints = async (userId) => {
   try {
-    const itemPoints = await getUserItemPoints(userId);
+    console.log('calculateUserTotalPoints called for user:', userId)
+    const itemPoints = await getUserItemPoints(userId)
+    console.log('Retrieved item points:', itemPoints)
     
     // Calculate intellectual score (research, books, education, conferences)
     const intellectualPoints = itemPoints
       .filter(point => ['publications_research', 'publications_books', 'education', 'conference_presentations'].includes(point.section_name))
-      .reduce((sum, point) => sum + point.points, 0);
+      .reduce((sum, point) => sum + point.points, 0)
     
     // Calculate professional score (teaching, professional_service)
     const professionalPoints = itemPoints
       .filter(point => ['teaching', 'professional_service'].includes(point.section_name))
-      .reduce((sum, point) => sum + point.points, 0);
+      .reduce((sum, point) => sum + point.points, 0)
     
-    const totalPoints = intellectualPoints + professionalPoints;
+    const totalPoints = intellectualPoints + professionalPoints
+    
+    console.log('Calculated scores:', { total: totalPoints, intellectual: intellectualPoints, professional: professionalPoints })
     
     return {
       total: totalPoints,
       intellectual: intellectualPoints,
       professional: professionalPoints
-    };
+    }
   } catch (error) {
-    console.error('Error calculating user total points:', error);
+    console.error('Error calculating user total points:', error)
     return {
       total: 0,
       intellectual: 0,
       professional: 0
-    };
+    }
   }
 }; 
