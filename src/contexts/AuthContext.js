@@ -23,7 +23,6 @@ export const AuthProvider = ({ children }) => {
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      console.log('Auth state changed:', _event, session?.user?.email)
       setUser(session?.user ?? null)
       setLoading(false)
     })
@@ -60,15 +59,39 @@ export const AuthProvider = ({ children }) => {
   const signOut = async () => {
     try {
       console.log('Attempting to sign out...')
+      
+      // First, get the current session to ensure it exists
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      
+      if (sessionError) {
+        console.error('Error getting session before sign out:', sessionError)
+      }
+      
+      if (!session) {
+        console.log('No active session found, clearing user state')
+        setUser(null)
+        return { error: null }
+      }
+      
+      console.log('Active session found, proceeding with sign out')
+      
+      // Perform the sign out
       const { error } = await supabase.auth.signOut()
+      
       if (error) {
         console.error('Sign out error:', error)
+        // Even if sign out fails, clear the user state
+        setUser(null)
       } else {
         console.log('Sign out successful')
+        setUser(null)
       }
+      
       return { error }
     } catch (error) {
       console.error('Sign out exception:', error)
+      // Clear user state even if there's an exception
+      setUser(null)
       return { error }
     }
   }

@@ -136,13 +136,15 @@ const AdminView = () => {
         .order('version_number', { ascending: false })
 
       if (error) {
-        toast.error('Error loading CV history')
+        console.error('Error loading CV history:', error)
+        toast.error('Error loading CV history: ' + error.message)
         return
       }
 
       setCvHistory(data || [])
     } catch (error) {
-      toast.error('Error loading CV history')
+      console.error('Exception loading CV history:', error)
+      toast.error('Error loading CV history: ' + error.message)
     }
   }
 

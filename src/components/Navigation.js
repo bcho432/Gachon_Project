@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { LogOut, User, ChevronDown, Shield } from 'lucide-react'
 import { checkIsAdmin } from '../utils/adminConfig'
+import { forceSignOut } from '../utils/sessionUtils'
 
 const Navigation = () => {
   const { user, signOut } = useAuth()
@@ -42,16 +43,34 @@ const Navigation = () => {
     })
     
     try {
+      // Try normal sign out first
       const { error } = await signOut()
+      
       if (error) {
-        console.error('Navigation: Sign out error:', error)
-        alert('Sign out failed: ' + error.message)
+        console.error('Navigation: Normal sign out failed, trying force sign out:', error)
+        
+        // If normal sign out fails, try force sign out
+        const forceResult = await forceSignOut()
+        if (forceResult.error) {
+          console.error('Navigation: Force sign out also failed:', forceResult.error)
+          alert('Sign out failed. Please try refreshing the page.')
+        } else {
+          console.log('Navigation: Force sign out successful')
+        }
       } else {
-        console.log('Navigation: Sign out successful')
+        console.log('Navigation: Normal sign out successful')
       }
     } catch (error) {
       console.error('Navigation: Sign out exception:', error)
-      alert('Sign out failed: ' + error.message)
+      
+      // Try force sign out as last resort
+      try {
+        await forceSignOut()
+        console.log('Navigation: Force sign out successful after exception')
+      } catch (forceError) {
+        console.error('Navigation: Force sign out also failed:', forceError)
+        alert('Sign out failed. Please try refreshing the page.')
+      }
     }
   }
 

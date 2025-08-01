@@ -12,8 +12,6 @@ export const FALLBACK_ADMIN_USER_IDS = [
 // Helper function to check if user is admin (database-backed)
 export const checkIsAdmin = async (userId) => {
   try {
-    console.log('Checking admin status for user:', userId)
-    
     // First check the database
     const { data: adminData, error } = await supabase
       .from('admin_users')
@@ -22,22 +20,17 @@ export const checkIsAdmin = async (userId) => {
       .single()
 
     if (error) {
-      console.log('Database error checking admin status:', error)
       // If table doesn't exist or other error, fallback to static array
       if (error.code === 'PGRST116' || error.code === '42P01') {
-        console.log('Falling back to static admin list')
         return FALLBACK_ADMIN_USER_IDS.includes(userId)
       }
       console.error('Error checking admin status:', error)
       return FALLBACK_ADMIN_USER_IDS.includes(userId)
     }
 
-    const isAdmin = !!adminData
-    console.log('Admin check result:', isAdmin)
-    return isAdmin
+    return !!adminData
   } catch (error) {
     console.error('Error checking admin status:', error)
-    console.log('Falling back to static admin list due to error')
     return FALLBACK_ADMIN_USER_IDS.includes(userId)
   }
 }

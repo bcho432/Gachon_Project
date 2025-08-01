@@ -6,7 +6,6 @@ import AuthForm from './components/AuthForm'
 import CVForm from './components/CVForm'
 import AdminView from './components/AdminView'
 import Navigation from './components/Navigation'
-import DebugInfo from './components/DebugInfo'
 import { checkIsAdmin } from './utils/adminConfig'
 
 // Protected Route Component
@@ -86,8 +85,6 @@ const AppContent = () => {
           />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-        
-        <DebugInfo />
       </div>
     </Router>
   )
