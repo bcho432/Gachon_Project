@@ -84,6 +84,15 @@ const Navigation = () => {
 
           {user && (
             <div className="flex items-center space-x-4">
+              {/* Dashboard Link - Show for all users */}
+              <a
+                href="/dashboard"
+                className="flex items-center text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+              >
+                <User className="h-4 w-4 mr-1" />
+                Dashboard
+              </a>
+
               {/* Admin Link - Only show for admin users */}
               {!adminLoading && isAdmin && (
                 <a

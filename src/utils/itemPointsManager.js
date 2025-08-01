@@ -618,3 +618,55 @@ export const calculateFilteredPoints = (cv, itemPoints, yearFilter) => {
     professional_score: calculateProfessionalScore(filteredItemPoints)
   };
 }; 
+
+// Get points for a specific user
+export const getUserItemPoints = async (userId) => {
+  try {
+    const { data, error } = await supabase
+      .from('item_points')
+      .select('*')
+      .eq('user_id', userId);
+
+    if (error) {
+      console.error('Error fetching user item points:', error);
+      throw error;
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching user item points:', error);
+    throw error;
+  }
+};
+
+// Calculate total points for a user from item_points
+export const calculateUserTotalPoints = async (userId) => {
+  try {
+    const itemPoints = await getUserItemPoints(userId);
+    
+    // Calculate intellectual score (research, books, education, conferences)
+    const intellectualPoints = itemPoints
+      .filter(point => ['publications_research', 'publications_books', 'education', 'conference_presentations'].includes(point.section_name))
+      .reduce((sum, point) => sum + point.points, 0);
+    
+    // Calculate professional score (teaching, professional_service)
+    const professionalPoints = itemPoints
+      .filter(point => ['teaching', 'professional_service'].includes(point.section_name))
+      .reduce((sum, point) => sum + point.points, 0);
+    
+    const totalPoints = intellectualPoints + professionalPoints;
+    
+    return {
+      total: totalPoints,
+      intellectual: intellectualPoints,
+      professional: professionalPoints
+    };
+  } catch (error) {
+    console.error('Error calculating user total points:', error);
+    return {
+      total: 0,
+      intellectual: 0,
+      professional: 0
+    };
+  }
+}; 

@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import AuthForm from './components/AuthForm'
 import CVForm from './components/CVForm'
 import AdminView from './components/AdminView'
+import UserDashboard from './components/UserDashboard'
 import Navigation from './components/Navigation'
 import { checkIsAdmin } from './utils/adminConfig'
 
@@ -72,6 +73,14 @@ const AppContent = () => {
             element={
               <ProtectedRoute>
                 <CVForm />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/dashboard" 
+            element={
+              <ProtectedRoute>
+                <UserDashboard />
               </ProtectedRoute>
             } 
           />

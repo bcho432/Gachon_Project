@@ -30,13 +30,6 @@ const AdminManager = () => {
     loadAdmins()
   }, [])
 
-  // Debug logging for admin list and current user
-  useEffect(() => {
-    console.log('Admin list:', adminList)
-    console.log('Current user:', user)
-    console.log('Is current user primary admin?', adminList[0]?.user_id === user?.id)
-  }, [adminList, user])
-
   const handleAddAdmin = async () => {
     if (!newAdminId.trim()) {
       toast.error('Please enter a user ID')
@@ -165,17 +158,6 @@ const AdminManager = () => {
               const isPrimaryAdmin = index === 0
               const isCurrentUser = user?.id === admin.user_id
               const isCurrentUserPrimaryAdmin = adminList[0]?.user_id === user?.id
-              
-              // Debug logging
-              console.log('Admin entry:', {
-                adminId: admin.user_id,
-                adminEmail: admin.email,
-                isPrimaryAdmin,
-                isCurrentUser,
-                isCurrentUserPrimaryAdmin,
-                currentUserId: user?.id,
-                firstAdminId: adminList[0]?.user_id
-              })
               
               return (
                 <div key={admin.user_id} className="flex justify-between items-center p-3 bg-gray-50 rounded-md">
