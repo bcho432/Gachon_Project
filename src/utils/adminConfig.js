@@ -41,7 +41,7 @@ export const getAllAdmins = async () => {
     const { data: admins, error } = await supabase
       .from('admin_users')
       .select('user_id, email, admin_level, created_at')
-      .order('created_at', { ascending: false })
+      .order('created_at', { ascending: true })
 
     if (error) {
       console.error('Error fetching admins:', error)
