@@ -236,6 +236,7 @@ const AdminView = () => {
   }, [cvs, yearFilter]);
 
   // Recalculate filtered points when year filter changes
+  // This useEffect is placed after the function definition to avoid initialization order issues
   useEffect(() => {
     calculateFilteredPointsForAllCVs();
   }, [yearFilter, calculateFilteredPointsForAllCVs]);
