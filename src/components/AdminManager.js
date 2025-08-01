@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react'
 import { FALLBACK_ADMIN_USER_IDS, addAdmin, removeAdmin, getAllAdmins } from '../utils/adminConfig'
-import { UserPlus, UserMinus, Users, RefreshCw } from 'lucide-react'
+import { UserPlus, UserMinus, Users, RefreshCw, Shield } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useAuth } from '../contexts/AuthContext'
 
 const AdminManager = () => {
+  const { user } = useAuth()
   const [newAdminId, setNewAdminId] = useState('')
   const [adminList, setAdminList] = useState([])
   const [loading, setLoading] = useState(false)
@@ -27,6 +29,13 @@ const AdminManager = () => {
   useEffect(() => {
     loadAdmins()
   }, [])
+
+  // Debug logging for admin list and current user
+  useEffect(() => {
+    console.log('Admin list:', adminList)
+    console.log('Current user:', user)
+    console.log('Is current user primary admin?', adminList[0]?.user_id === user?.id)
+  }, [adminList, user])
 
   const handleAddAdmin = async () => {
     if (!newAdminId.trim()) {
@@ -58,6 +67,20 @@ const AdminManager = () => {
   const handleRemoveAdmin = async (userId) => {
     if (adminList.length <= 1) {
       toast.error('Cannot remove the last admin')
+      return
+    }
+
+    // Check if current user is the primary admin
+    const isPrimaryAdmin = adminList[0]?.user_id === user?.id
+    if (!isPrimaryAdmin) {
+      toast.error('Only the Primary Admin can remove other admins')
+      return
+    }
+
+    // Check if trying to remove the primary admin
+    const isRemovingPrimary = adminList[0]?.user_id === userId
+    if (isRemovingPrimary) {
+      toast.error('Cannot remove the Primary Admin')
       return
     }
 
@@ -138,27 +161,53 @@ const AdminManager = () => {
           </div>
         ) : (
           <div className="space-y-2">
-            {adminList.map((admin, index) => (
-              <div key={admin.user_id} className="flex justify-between items-center p-3 bg-gray-50 rounded-md">
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{admin.user_id}</p>
-                  <p className="text-xs text-gray-500">{admin.email}</p>
-                  <p className="text-xs text-gray-400">
-                    {index === 0 ? 'Primary Admin' : 'Additional Admin'} • {admin.admin_level}
-                  </p>
+            {adminList.map((admin, index) => {
+              const isPrimaryAdmin = index === 0
+              const isCurrentUser = user?.id === admin.user_id
+              const isCurrentUserPrimaryAdmin = adminList[0]?.user_id === user?.id
+              
+              // Debug logging
+              console.log('Admin entry:', {
+                adminId: admin.user_id,
+                adminEmail: admin.email,
+                isPrimaryAdmin,
+                isCurrentUser,
+                isCurrentUserPrimaryAdmin,
+                currentUserId: user?.id,
+                firstAdminId: adminList[0]?.user_id
+              })
+              
+              return (
+                <div key={admin.user_id} className="flex justify-between items-center p-3 bg-gray-50 rounded-md">
+                  <div className="flex items-center">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{admin.user_id}</p>
+                      <p className="text-xs text-gray-500">{admin.email}</p>
+                      <p className="text-xs text-gray-400">
+                        {isPrimaryAdmin ? 'Primary Admin' : 'Additional Admin'} • {admin.admin_level}
+                      </p>
+                    </div>
+                    {isPrimaryAdmin && (
+                      <Shield className="h-4 w-4 ml-2 text-yellow-600" />
+                    )}
+                  </div>
+                  {isCurrentUserPrimaryAdmin && !isPrimaryAdmin && adminList.length > 1 ? (
+                    <button
+                      onClick={() => handleRemoveAdmin(admin.user_id)}
+                      disabled={loading}
+                      className="flex items-center px-2 py-1 text-red-600 hover:text-red-800 text-sm disabled:opacity-50"
+                    >
+                      <UserMinus className="h-4 w-4 mr-1" />
+                      Remove
+                    </button>
+                  ) : !isPrimaryAdmin && !isCurrentUserPrimaryAdmin ? (
+                    <span className="text-xs text-gray-400 px-2 py-1">
+                      Only Primary Admin can remove
+                    </span>
+                  ) : null}
                 </div>
-                {adminList.length > 1 && (
-                  <button
-                    onClick={() => handleRemoveAdmin(admin.user_id)}
-                    disabled={loading}
-                    className="flex items-center px-2 py-1 text-red-600 hover:text-red-800 text-sm disabled:opacity-50"
-                  >
-                    <UserMinus className="h-4 w-4 mr-1" />
-                    Remove
-                  </button>
-                )}
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
@@ -168,6 +217,8 @@ const AdminManager = () => {
         <ul className="text-sm text-gray-600 space-y-1">
           <li>• Admin changes are now persistent and stored in the database</li>
           <li>• At least one admin must remain in the system</li>
+          <li>• Only the Primary Admin (first in list) can remove other admins</li>
+          <li>• The Primary Admin cannot be removed</li>
           <li>• Use the Refresh button to reload the admin list</li>
           <li>• Admin status persists across page refreshes</li>
         </ul>
