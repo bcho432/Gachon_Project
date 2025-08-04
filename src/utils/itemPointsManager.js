@@ -20,6 +20,7 @@ export const addItemPoints = async (userId, cvId, sectionName, itemIndex, points
       throw new Error(`Database error: ${checkError.message}`);
     }
 
+    // eslint-disable-next-line no-unused-vars
     let result;
     if (existingRecord) {
       // Update existing record - preserve item_data
@@ -125,6 +126,7 @@ export const subtractItemPoints = async (userId, cvId, sectionName, itemIndex, p
       throw new Error(`Database error: ${checkError.message}`);
     }
 
+    // eslint-disable-next-line no-unused-vars
     let result;
     if (existingRecord) {
       // Update existing record - preserve item_data
@@ -348,7 +350,8 @@ export const SECTION_NAMES = {
   publications_research: 'Publications (Research)',
   publications_books: 'Publications (Books)',
   conference_presentations: 'Conference Presentations',
-  professional_service: 'Professional Service'
+  professional_service: 'Professional Service',
+  internal_activities: 'Internal Activities at Gachon'
 };
 
 // Get section display name
@@ -376,6 +379,8 @@ export const getItemDisplayText = (sectionName, itemData) => {
       return itemData.title || 'Conference Presentation';
     case 'professional_service':
       return itemData.role || 'Professional Service';
+    case 'internal_activities':
+      return `${itemData.position_type || 'Service Type'} - ${itemData.details || 'Details'}`;
     default:
       return JSON.stringify(itemData).substring(0, 50) + '...';
   }
@@ -390,12 +395,12 @@ export const calculateIntellectualScore = (itemPoints) => {
     .reduce((sum, item) => sum + (item.points || 0), 0);
 };
 
-// Calculate Professional Score (Teaching + Professional Service)
+// Calculate Professional Score (Teaching + Professional Service + Internal Activities)
 export const calculateProfessionalScore = (itemPoints) => {
   if (!itemPoints || !Array.isArray(itemPoints)) return 0;
   
   return itemPoints
-    .filter(item => ['teaching', 'professional_service'].includes(item.section_name))
+    .filter(item => ['teaching', 'professional_service', 'internal_activities'].includes(item.section_name))
     .reduce((sum, item) => sum + (item.points || 0), 0);
 };
 
@@ -451,7 +456,7 @@ export const getAllCVsWithCategorizedScores = async () => {
       }
 
       // Professional score
-      if (['teaching', 'professional_service'].includes(point.section_name)) {
+      if (['teaching', 'professional_service', 'internal_activities'].includes(point.section_name)) {
         if (!cvProfessionalMap[cvId]) {
           cvProfessionalMap[cvId] = 0;
         }
@@ -550,6 +555,7 @@ export const filterCVByYear = (cv, yearFilter) => {
   filteredCV.publications_books = filterByYear(cv.publications_books);
   filteredCV.conference_presentations = filterByYear(cv.conference_presentations);
   filteredCV.professional_service = filterByYear(cv.professional_service);
+  filteredCV.internal_activities = filterByYear(cv.internal_activities);
 
   return filteredCV;
 };

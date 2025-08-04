@@ -135,7 +135,8 @@ export const SECTION_NAMES = {
   publications_research: 'Publications (Research)',
   publications_books: 'Publications (Books)',
   conference_presentations: 'Conference Presentations',
-  professional_service: 'Professional Service'
+  professional_service: 'Professional Service',
+  internal_activities: 'Internal Activities at Gachon'
 };
 
 // Get section display name

@@ -49,6 +49,7 @@ export const cvTable = {
     publications_books: 'json',
     conference_presentations: 'json',
     professional_service: 'json',
+    internal_activities: 'json',
     updated_at: 'timestamp'
   }
 } 

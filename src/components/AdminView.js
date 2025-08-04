@@ -82,6 +82,17 @@ const AdminView = () => {
     loadAllCVs(1, debouncedSearchTerm)
   }, [debouncedSearchTerm, loadAllCVs])
 
+  // Periodically refresh CV data to ensure it's up to date
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!loading) {
+        loadAllCVs(currentPage, debouncedSearchTerm);
+      }
+    }, 30000); // Refresh every 30 seconds
+
+    return () => clearInterval(interval);
+  }, [currentPage, debouncedSearchTerm, loading, loadAllCVs]);
+
   const handlePageChange = (page) => {
     loadAllCVs(page, searchTerm)
   }
@@ -208,6 +219,11 @@ const AdminView = () => {
     loadAllCVs(currentPage, debouncedSearchTerm);
   }
 
+  // Add a function to refresh CV data when needed
+  const refreshCVData = async () => {
+    await loadAllCVs(currentPage, debouncedSearchTerm);
+  }
+
   // Calculate filtered points for all CVs
   const calculateFilteredPointsForAllCVs = useCallback(async () => {
     if (!yearFilter.from && !yearFilter.to) {
@@ -309,7 +325,7 @@ const AdminView = () => {
                     <li><strong>Individual Items:</strong> Each CV item (publication, education entry, etc.) can have points</li>
                     <li><strong>Total Points:</strong> Sum of all item points displayed next to the CV name</li>
                     <li><strong>Intellectual Score:</strong> Research Publications + Books + Education + Conference Presentations (Education always included)</li>
-                    <li><strong>Professional Score:</strong> Teaching + Professional Service</li>
+                    <li><strong>Professional Score:</strong> Teaching + Professional Service + Internal Activities</li>
                     <li><strong>History:</strong> Click the history icon (📜) to view all point changes</li>
                     <li><strong>Real-time Updates:</strong> Points update immediately after applying changes</li>
                   </ul>
@@ -345,6 +361,7 @@ const AdminView = () => {
                       <ul className="list-disc list-inside space-y-1 ml-2 text-xs text-gray-600">
                         <li><strong>Teaching Experience:</strong> Courses taught, student supervision, curriculum development</li>
                         <li><strong>Professional Service:</strong> Committee work, administrative roles, community service</li>
+                        <li><strong>Internal Activities at Gachon:</strong> Any work or relevant experiences pursued at Gachon University</li>
                       </ul>
                     </div>
                     
@@ -540,6 +557,7 @@ const AdminView = () => {
                          {/* Item Points Manager */}
                          <div className="mt-3 pt-3 border-t border-gray-200">
                            <ItemPointsManager 
+                             key={`${cv.id}-${cv.updated_at}`}
                              cv={displayCV}
                              onPointsUpdate={handlePointsUpdate}
                            />
@@ -804,6 +822,25 @@ const CVPrintView = ({ cv, yearFilter = { from: '', to: '' } }) => {
           ))}
         </div>
       )}
+
+      {/* Internal Activities at Gachon */}
+      <div>
+        <h2 className="text-xl font-bold text-gray-900 border-b border-gray-300 pb-2 mb-4">Internal Activities at Gachon</h2>
+        {filteredCV.internal_activities && filteredCV.internal_activities.length > 0 && (
+          filteredCV.internal_activities.map((activity, index) => (
+            <div key={index} className="mb-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="font-semibold">{activity.position_type}</p>
+                  {activity.details && <p className="text-gray-600 mt-1">{activity.details}</p>}
+                  {activity.current && <p className="text-green-600 text-sm mt-1">Current Activity</p>}
+                </div>
+                <p className="text-gray-600">{activity.year}</p>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
     </div>
   )
 }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../supabase'
-import { Save, Plus, Trash2, GraduationCap, Briefcase, BookOpen, Users, Award, User } from 'lucide-react'
+import { Save, Plus, Trash2, GraduationCap, Briefcase, BookOpen, Users, Award, User, Building } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const CVForm = () => {
@@ -20,7 +20,8 @@ const CVForm = () => {
     publications_research: [{ title: '', journal: '', year: '', authors: '', doi: '', index: '' }],
     publications_books: [{ title: '', publisher: '', year: '', authors: '', isbn: '' }],
     conference_presentations: [{ title: '', conference: '', year: '', location: '', type: '' }],
-    professional_service: [{ role: '', organization: '', year: '', description: '' }]
+    professional_service: [{ role: '', organization: '', year: '', description: '' }],
+    internal_activities: [{ year: '', position_type: '', details: '', current: false }]
   })
 
   const loadCV = useCallback(async () => {
@@ -51,7 +52,8 @@ const CVForm = () => {
           publications_research: data.publications_research || [{ title: '', journal: '', year: '', authors: '', doi: '', index: '' }],
           publications_books: data.publications_books || [{ title: '', publisher: '', year: '', authors: '', isbn: '' }],
           conference_presentations: data.conference_presentations || [{ title: '', conference: '', year: '', location: '', type: '' }],
-          professional_service: data.professional_service || [{ role: '', organization: '', year: '', description: '' }]
+          professional_service: data.professional_service || [{ role: '', organization: '', year: '', description: '' }],
+          internal_activities: data.internal_activities || [{ year: '', position_type: '', details: '', current: false }]
         })
       }
     } catch (error) {
@@ -157,7 +159,8 @@ const CVForm = () => {
       publications_research: { title: '', journal: '', year: '', authors: '', doi: '', index: '' },
       publications_books: { title: '', publisher: '', year: '', authors: '', isbn: '' },
       conference_presentations: { title: '', conference: '', year: '', location: '', type: '' },
-      professional_service: { role: '', organization: '', year: '', description: '' }
+      professional_service: { role: '', organization: '', year: '', description: '' },
+      internal_activities: { year: '', position_type: '', details: '', current: false }
     }
 
     setFormData(prev => ({
@@ -693,6 +696,73 @@ const CVForm = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                     rows="3"
                   />
+                </div>
+              ))}
+            </div>
+
+            {/* Internal Activities */}
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-semibold text-gray-900 flex items-center">
+                  <Building className="h-5 w-5 mr-2" />
+                  Internal Activities at Gachon
+                </h2>
+                <button
+                  onClick={() => addArrayItem('internal_activities')}
+                  className="flex items-center px-3 py-1 text-sm bg-green-600 text-white rounded-md hover:bg-green-700"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Activity
+                </button>
+              </div>
+              {formData.internal_activities.map((activity, index) => (
+                <div key={index} className="border border-gray-200 rounded-md p-4 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h3 className="font-medium">Activity #{index + 1}</h3>
+                    <button
+                      onClick={() => removeArrayItem('internal_activities', index)}
+                      className="text-red-600 hover:text-red-800"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <input
+                      type="text"
+                      placeholder="Year"
+                      value={activity.year}
+                      onChange={(e) => updateArrayField('internal_activities', index, 'year', e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                                                              <select
+                       value={activity.position_type}
+                       onChange={(e) => updateArrayField('internal_activities', index, 'position_type', e.target.value)}
+                       className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                     >
+                       <option value="">Select Service Type</option>
+                       <option value="Admin Position">Admin Position</option>
+                       <option value="Dept Committee">Dept Committee</option>
+                       <option value="HQ Committee">HQ Committee</option>
+                       <option value="Student Advising">Student Advising</option>
+                       <option value="Others">Others</option>
+                     </select>
+                     <textarea
+                       placeholder="Details"
+                       value={activity.details}
+                       onChange={(e) => updateArrayField('internal_activities', index, 'details', e.target.value)}
+                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                       rows="4"
+                     />
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={activity.current}
+                        onChange={(e) => updateArrayField('internal_activities', index, 'current', e.target.checked)}
+                        className="mr-2"
+                      />
+                      <label className="text-sm text-gray-600">Current Activity</label>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>

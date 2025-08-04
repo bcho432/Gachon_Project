@@ -5,6 +5,168 @@ import { Eye, Printer, Award, TrendingUp, BookOpen, Users, Filter } from 'lucide
 import toast from 'react-hot-toast'
 import { calculateUserTotalPoints, filterCVByYear, calculateFilteredPoints, getCVItemsWithPoints } from '../utils/itemPointsManager'
 
+// CV Print View Component (same as in AdminView)
+const CVPrintView = ({ cv, yearFilter = { from: '', to: '' } }) => {
+  // Apply year filter to CV data for printing
+  const filteredCV = filterCVByYear(cv, yearFilter)
+
+  return (
+    <div className="print-content space-y-6">
+      {/* Header */}
+      <div className="text-center border-b-2 border-gray-300 pb-4">
+        <h1 className="text-3xl font-bold text-gray-900">{filteredCV.full_name}</h1>
+        <div className="mt-2 space-y-1 text-gray-600">
+          {filteredCV.phone && <p>{filteredCV.phone}</p>}
+          {filteredCV.email && <p>{filteredCV.email}</p>}
+          {filteredCV.address && <p>{filteredCV.address}</p>}
+        </div>
+      </div>
+
+      {/* Education */}
+      {filteredCV.education && filteredCV.education.length > 0 && (
+        <div>
+          <h2 className="text-xl font-bold text-gray-900 border-b border-gray-300 pb-2 mb-4">Education</h2>
+          {filteredCV.education.map((edu, index) => (
+            <div key={index} className="mb-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="font-semibold">{edu.degree}</p>
+                  <p className="text-gray-600">{edu.institution}</p>
+                  {edu.field && <p className="text-gray-500 text-sm">Field: {edu.field}</p>}
+                </div>
+                <p className="text-gray-600">{edu.year}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Academic Employment */}
+      {filteredCV.academic_employment && filteredCV.academic_employment.length > 0 && (
+        <div>
+          <h2 className="text-xl font-bold text-gray-900 border-b border-gray-300 pb-2 mb-4">Academic Employment</h2>
+          {filteredCV.academic_employment.map((job, index) => (
+            <div key={index} className="mb-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="font-semibold">{job.position}</p>
+                  <p className="text-gray-600">{job.institution}</p>
+                </div>
+                <p className="text-gray-600">
+                  {job.start_date} - {job.current ? 'Present' : job.end_date}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Teaching Experience */}
+      {filteredCV.teaching && filteredCV.teaching.length > 0 && (
+        <div>
+          <h2 className="text-xl font-bold text-gray-900 border-b border-gray-300 pb-2 mb-4">Teaching Experience</h2>
+          {filteredCV.teaching.map((course, index) => (
+            <div key={index} className="mb-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="font-semibold">{course.course}</p>
+                  <p className="text-gray-600">{course.institution}</p>
+                  {course.description && <p className="text-gray-500 text-sm mt-1">{course.description}</p>}
+                </div>
+                <p className="text-gray-600">{course.year}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Research Publications */}
+      {filteredCV.publications_research && filteredCV.publications_research.length > 0 && (
+        <div>
+          <h2 className="text-xl font-bold text-gray-900 border-b border-gray-300 pb-2 mb-4">Research Publications</h2>
+          {filteredCV.publications_research.map((pub, index) => (
+            <div key={index} className="mb-4">
+              <p className="font-semibold">{pub.title}</p>
+              <p className="text-gray-600">{pub.authors}</p>
+              <p className="text-gray-500">{pub.journal}, {pub.year}</p>
+              {pub.index && <p className="text-gray-400 text-sm">Index: {pub.index}</p>}
+              {pub.doi && <p className="text-gray-400 text-sm">DOI: {pub.doi}</p>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Books */}
+      {filteredCV.publications_books && filteredCV.publications_books.length > 0 && (
+        <div>
+          <h2 className="text-xl font-bold text-gray-900 border-b border-gray-300 pb-2 mb-4">Books</h2>
+          {filteredCV.publications_books.map((book, index) => (
+            <div key={index} className="mb-4">
+              <p className="font-semibold">{book.title}</p>
+              <p className="text-gray-600">{book.authors}</p>
+              <p className="text-gray-500">{book.publisher}, {book.year}</p>
+              {book.isbn && <p className="text-gray-400 text-sm">ISBN: {book.isbn}</p>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Conference Presentations */}
+      {filteredCV.conference_presentations && filteredCV.conference_presentations.length > 0 && (
+        <div>
+          <h2 className="text-xl font-bold text-gray-900 border-b border-gray-300 pb-2 mb-4">Conference Presentations</h2>
+          {filteredCV.conference_presentations.map((presentation, index) => (
+            <div key={index} className="mb-4">
+              <p className="font-semibold">{presentation.title}</p>
+              <p className="text-gray-600">{presentation.conference}</p>
+              <p className="text-gray-500">{presentation.location}, {presentation.year}</p>
+              {presentation.type && <p className="text-gray-400 text-sm">Type: {presentation.type}</p>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Professional Service */}
+      {filteredCV.professional_service && filteredCV.professional_service.length > 0 && (
+        <div>
+          <h2 className="text-xl font-bold text-gray-900 border-b border-gray-300 pb-2 mb-4">Professional Service</h2>
+          {filteredCV.professional_service.map((service, index) => (
+            <div key={index} className="mb-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="font-semibold">{service.role}</p>
+                  <p className="text-gray-600">{service.organization}</p>
+                  {service.description && <p className="text-gray-500 text-sm mt-1">{service.description}</p>}
+                </div>
+                <p className="text-gray-600">{service.year}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Internal Activities at Gachon */}
+      <div>
+        <h2 className="text-xl font-bold text-gray-900 border-b border-gray-300 pb-2 mb-4">Internal Activities at Gachon</h2>
+        {filteredCV.internal_activities && filteredCV.internal_activities.length > 0 && (
+          filteredCV.internal_activities.map((activity, index) => (
+            <div key={index} className="mb-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="font-semibold">{activity.position_type}</p>
+                  {activity.details && <p className="text-gray-600 mt-1">{activity.details}</p>}
+                  {activity.current && <p className="text-green-600 text-sm mt-1">Current Activity</p>}
+                </div>
+                <p className="text-gray-600">{activity.year}</p>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  )
+}
+
 const UserDashboard = () => {
   const { user } = useAuth()
   const [cv, setCv] = useState(null)
@@ -139,6 +301,24 @@ const UserDashboard = () => {
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-4xl mx-auto px-4">
+        {/* Print Warning Message - At the very top */}
+        {!showPrintModal && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 mb-6">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-yellow-800">
+                  <strong>Print Notice:</strong> Currently, the print CV for this dashboard creates duplicates. Please be aware of this if or when you try to print out your own CV on this page. You can still adjust for this once you hit print by typing in which pages you would like to print out.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="bg-white rounded-lg shadow p-6 mb-6">
           <div className="flex justify-between items-start">
@@ -168,6 +348,9 @@ const UserDashboard = () => {
           </div>
         </div>
 
+        {/* Main Dashboard Content - Hidden when print modal is open */}
+        {!showPrintModal && (
+          <>
         {/* Year Filter */}
         <div className="bg-white rounded-lg shadow p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
@@ -265,7 +448,7 @@ const UserDashboard = () => {
                   ) : null}
                 </p>
                 <p className="text-3xl font-bold text-green-600">{filteredProfessionalScore}</p>
-                <p className="text-xs text-gray-500">Teaching, Service</p>
+                    <p className="text-xs text-gray-500">Teaching, Service, Internal Activities</p>
                 {(yearFilter.from || yearFilter.to) && filteredProfessionalScore !== professionalScore && (
                   <p className="text-xs text-gray-500">Total: {professionalScore}</p>
                 )}
@@ -314,7 +497,8 @@ const UserDashboard = () => {
             )}
           </div>
         </div>
-      </div>
+          </>
+        )}
 
       {/* Print Modal */}
       {showPrintModal && filteredCV && (
@@ -344,156 +528,12 @@ const UserDashboard = () => {
               </div>
             </div>
             <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
-              <div className="print-content space-y-6">
-                {/* Header */}
-                <div className="text-center border-b-2 border-gray-300 pb-4">
-                  <h1 className="text-3xl font-bold text-gray-900">{filteredCV.full_name}</h1>
-                  <div className="mt-2 space-y-1 text-gray-600">
-                    {filteredCV.phone && <p>{filteredCV.phone}</p>}
-                    {filteredCV.email && <p>{filteredCV.email}</p>}
-                    {filteredCV.address && <p>{filteredCV.address}</p>}
-                  </div>
-                </div>
-
-                {/* Education */}
-                {filteredCV.education && filteredCV.education.length > 0 && (
-                  <div>
-                    <h2 className="text-xl font-bold text-gray-900 border-b border-gray-300 pb-2 mb-4">Education</h2>
-                    {filteredCV.education.map((edu, index) => (
-                      <div key={index} className="mb-4">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="font-semibold">{edu.degree}</p>
-                            <p className="text-gray-600">{edu.institution}</p>
-                            {edu.field && <p className="text-gray-500 text-sm">Field: {edu.field}</p>}
-                          </div>
-                          <p className="text-gray-600">{edu.year}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Academic Employment */}
-                {filteredCV.academic_employment && filteredCV.academic_employment.length > 0 && (
-                  <div>
-                    <h2 className="text-xl font-bold text-gray-900 border-b border-gray-300 pb-2 mb-4">Academic Employment</h2>
-                    {filteredCV.academic_employment.map((job, index) => (
-                      <div key={index} className="mb-4">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="font-semibold">{job.position}</p>
-                            <p className="text-gray-600">{job.institution}</p>
-                          </div>
-                          <p className="text-gray-600">
-                            {job.start_date} - {job.current ? 'Present' : job.end_date}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Teaching Experience */}
-                {filteredCV.teaching && filteredCV.teaching.length > 0 && (
-                  <div>
-                    <h2 className="text-xl font-bold text-gray-900 border-b border-gray-300 pb-2 mb-4">Teaching Experience</h2>
-                    {filteredCV.teaching.map((course, index) => (
-                      <div key={index} className="mb-4">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="font-semibold">{course.course}</p>
-                            <p className="text-gray-600">{course.institution}</p>
-                            {course.description && <p className="text-gray-500 text-sm mt-1">{course.description}</p>}
-                          </div>
-                          <p className="text-gray-600">{course.year}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Research Publications */}
-                {filteredCV.publications_research && filteredCV.publications_research.length > 0 && (
-                  <div>
-                    <h2 className="text-xl font-bold text-gray-900 border-b border-gray-300 pb-2 mb-4">Research Publications</h2>
-                    {filteredCV.publications_research.map((pub, index) => (
-                      <div key={index} className="mb-4">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="font-semibold">{pub.title}</p>
-                            <p className="text-gray-600">{pub.journal}</p>
-                            {pub.authors && <p className="text-gray-500 text-sm">Authors: {pub.authors}</p>}
-                            {pub.index && <p className="text-gray-500 text-sm">Index: {pub.index}</p>}
-                          </div>
-                          <p className="text-gray-600">{pub.year}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Books */}
-                {filteredCV.publications_books && filteredCV.publications_books.length > 0 && (
-                  <div>
-                    <h2 className="text-xl font-bold text-gray-900 border-b border-gray-300 pb-2 mb-4">Books</h2>
-                    {filteredCV.publications_books.map((book, index) => (
-                      <div key={index} className="mb-4">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="font-semibold">{book.title}</p>
-                            <p className="text-gray-600">{book.publisher}</p>
-                            {book.authors && <p className="text-gray-500 text-sm">Authors: {book.authors}</p>}
-                          </div>
-                          <p className="text-gray-600">{book.year}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Conference Presentations */}
-                {filteredCV.conference_presentations && filteredCV.conference_presentations.length > 0 && (
-                  <div>
-                    <h2 className="text-xl font-bold text-gray-900 border-b border-gray-300 pb-2 mb-4">Conference Presentations</h2>
-                    {filteredCV.conference_presentations.map((conf, index) => (
-                      <div key={index} className="mb-4">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="font-semibold">{conf.title}</p>
-                            <p className="text-gray-600">{conf.conference}</p>
-                            {conf.location && <p className="text-gray-500 text-sm">Location: {conf.location}</p>}
-                          </div>
-                          <p className="text-gray-600">{conf.year}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Professional Service */}
-                {filteredCV.professional_service && filteredCV.professional_service.length > 0 && (
-                  <div>
-                    <h2 className="text-xl font-bold text-gray-900 border-b border-gray-300 pb-2 mb-4">Professional Service</h2>
-                    {filteredCV.professional_service.map((service, index) => (
-                      <div key={index} className="mb-4">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="font-semibold">{service.role}</p>
-                            <p className="text-gray-600">{service.organization}</p>
-                            {service.description && <p className="text-gray-500 text-sm mt-1">{service.description}</p>}
-                          </div>
-                          <p className="text-gray-600">{service.year}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <CVPrintView cv={filteredCV} yearFilter={yearFilter} />
               </div>
             </div>
           </div>
+        )}
         </div>
-      )}
     </div>
   )
 }

@@ -44,6 +44,43 @@ const AuthForm = () => {
             CV Manager for Professors
           </p>
         </div>
+
+        {/* Email verification message for sign up */}
+        {!isLogin && (
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-blue-800">
+                  <strong>READ:</strong> After you sign up, you will receive an email verification from 'Supabase'. Please click on the link to verify your email. You may be redirected to a page that doesn't exist, but don't worry—this means the verification was successful and you can now log in. If you don't receive an email, it most likely means that the email address has already been signed up. </p> <br></br>
+                  <p className="text-sm text-blue-800">If you have any questions, please email gachonhelper018@gmail.com or sungguri@gachon.ac.kr.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Contact information message for sign in */}
+        {isLogin && (
+          <div className="bg-gray-50 border border-gray-200 rounded-md p-4">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-gray-700">
+                  If you have any questions, please email gachonhelper018@gmail.com or sungguri@gachon.ac.kr.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
         
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="rounded-md shadow-sm -space-y-px">

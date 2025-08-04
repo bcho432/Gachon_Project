@@ -23,7 +23,7 @@ const ItemPointsManager = ({ cv, onPointsUpdate }) => {
 
   useEffect(() => {
     loadItemsWithPoints();
-  }, [cv.id]);
+  }, [cv.id, cv.full_name, cv.updated_at, cv]);
 
   const loadItemsWithPoints = async () => {
     setLoadingItems(true);
@@ -141,6 +141,20 @@ const ItemPointsManager = ({ cv, onPointsUpdate }) => {
         if (hasContent(item)) {
           items.push({
             section_name: 'professional_service',
+            item_index: index,
+            item_data: item,
+            points: 0
+          });
+        }
+      });
+    }
+    
+    // Add internal activities items
+    if (cv.internal_activities && Array.isArray(cv.internal_activities) && cv.internal_activities.length > 0) {
+      cv.internal_activities.forEach((item, index) => {
+        if (hasContent(item)) {
+          items.push({
+            section_name: 'internal_activities',
             item_index: index,
             item_data: item,
             points: 0

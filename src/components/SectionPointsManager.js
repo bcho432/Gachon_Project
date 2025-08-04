@@ -22,7 +22,8 @@ const SectionPointsManager = ({ cv, onPointsUpdate }) => {
     { key: 'publications_research', label: 'Publications (Research)', points: cv.publications_research_points || 0 },
     { key: 'publications_books', label: 'Publications (Books)', points: cv.publications_books_points || 0 },
     { key: 'conference_presentations', label: 'Conference Presentations', points: cv.conference_presentations_points || 0 },
-    { key: 'professional_service', label: 'Professional Service', points: cv.professional_service_points || 0 }
+    { key: 'professional_service', label: 'Professional Service', points: cv.professional_service_points || 0 },
+    { key: 'internal_activities', label: 'Internal Activities at Gachon', points: cv.internal_activities_points || 0 }
   ];
 
   const totalPoints = sections.reduce((sum, section) => sum + section.points, 0);
