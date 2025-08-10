@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../supabase'
-import { Printer, Eye, Search, User, History, Clock, Trash2, Award, Calendar } from 'lucide-react'
+import { Printer, Eye, Search, User, History, Clock, Trash2, Award, Calendar, Trophy } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useReactToPrint } from 'react-to-print'
 import PerformanceMonitor from './PerformanceMonitor'
@@ -41,6 +41,14 @@ const AdminView = () => {
   const [pageSize] = useState(20) // Show 20 CVs per page
   const printRef = useRef()
   const historyPrintRef = useRef()
+
+  // Ranking system state
+  const [rankings, setRankings] = useState({
+    intellectual: [],
+    professional: [],
+    overall: []
+  })
+  const [showRankings, setShowRankings] = useState(false)
 
   const loadAllCVs = useCallback(async (page = 1, search = '') => {
     setLoading(true)
@@ -383,6 +391,9 @@ const AdminView = () => {
       }
       
       setFilteredPoints(newFilteredPoints);
+      
+      // Calculate rankings based on filtered points
+      calculateRankings(newFilteredPoints);
     } catch (error) {
       console.error('Error calculating filtered points:', error);
     } finally {
@@ -390,8 +401,86 @@ const AdminView = () => {
     }
   }, [cvs, yearFilter]);
 
+  // Calculate rankings for all CVs
+  const calculateRankings = useCallback((pointsData = null) => {
+    const dataToUse = pointsData || filteredPoints;
+    const allCVsWithPoints = [];
+    
+    // Combine CVs with their points data
+    cvs.forEach(cv => {
+      const cvWithPoints = cvsWithItemPoints.find(c => c.cv_id === cv.id);
+      const cvWithCategorizedScores = cvsWithCategorizedScores.find(c => c.cv_id === cv.id);
+      const filteredPointsData = dataToUse[cv.id];
+      
+      const intellectualScore = filteredPointsData ? 
+        filteredPointsData.intellectual_score : 
+        (cvWithCategorizedScores?.intellectual_score || 0);
+      
+      const professionalScore = filteredPointsData ? 
+        filteredPointsData.professional_score : 
+        (cvWithCategorizedScores?.professional_score || 0);
+      
+      const totalPoints = filteredPointsData ? 
+        filteredPointsData.total_points : 
+        (cvWithPoints?.total_points || 0);
+      
+      allCVsWithPoints.push({
+        cv,
+        intellectualScore,
+        professionalScore,
+        totalPoints
+      });
+    });
+    
+    // Helper function to assign ranks with proper tie handling
+    const assignRanks = (items, scoreKey) => {
+      // Sort by score in descending order
+      const sorted = [...items].sort((a, b) => b[scoreKey] - a[scoreKey]);
+      
+      let currentRank = 1;
+      let currentScore = null;
+      let itemsWithSameScore = 0;
+      
+      return sorted.map((item, index) => {
+        const score = item[scoreKey];
+        
+        if (score !== currentScore) {
+          // New score, update rank
+          currentRank = index + 1;
+          currentScore = score;
+          itemsWithSameScore = 1;
+        } else {
+          // Same score as previous, increment count
+          itemsWithSameScore++;
+        }
+        
+        return {
+          ...item,
+          rank: currentRank
+        };
+      });
+    };
+    
+    // Calculate rankings with proper tie handling
+    const intellectualRankings = assignRanks(allCVsWithPoints, 'intellectualScore');
+    const professionalRankings = assignRanks(allCVsWithPoints, 'professionalScore');
+    const overallRankings = assignRanks(allCVsWithPoints, 'totalPoints');
+    
+    setRankings({
+      intellectual: intellectualRankings,
+      professional: professionalRankings,
+      overall: overallRankings
+    });
+  }, [cvs, cvsWithItemPoints, cvsWithCategorizedScores, filteredPoints]);
+
+  // Calculate rankings when CVs or points data changes
+  useEffect(() => {
+    if (cvs.length > 0 && (cvsWithItemPoints.length > 0 || cvsWithCategorizedScores.length > 0)) {
+      calculateRankings();
+    }
+  }, [cvs, cvsWithItemPoints, cvsWithCategorizedScores, calculateRankings]);
+
   // Recalculate filtered points when year filter changes
-  // This useEffect is placed after the function definition to avoid initialization order issues
   useEffect(() => {
     calculateFilteredPointsForAllCVs();
   }, [yearFilter, calculateFilteredPointsForAllCVs]);
@@ -586,6 +675,128 @@ const AdminView = () => {
               </div>
             </div>
 
+            {/* Rankings Display */}
+            <div className="mb-6">
+              <div className="bg-white p-4 rounded-lg border border-gray-200">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Trophy className="h-5 w-5 text-yellow-600" />
+                    <h3 className="font-medium text-gray-800">Rankings</h3>
+                  </div>
+                  <button
+                    onClick={() => setShowRankings(!showRankings)}
+                    className="px-3 py-1 text-sm bg-yellow-100 text-yellow-700 rounded hover:bg-yellow-200 transition-colors"
+                  >
+                    {showRankings ? 'Hide Rankings' : 'Show Rankings'}
+                  </button>
+                </div>
+                
+                {showRankings && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Intellectual Rankings */}
+                    <div className="bg-blue-50 p-3 rounded border border-blue-200">
+                      <h4 className="font-semibold text-blue-800 mb-2 flex items-center gap-1">
+                        🧠 Intellectual Score Rankings
+                      </h4>
+                      <div className="space-y-1 max-h-60 overflow-y-auto">
+                        {rankings.intellectual.slice(0, 10).map((item, index) => (
+                          <div key={item.cv.id} className="flex items-center justify-between text-sm">
+                            <div className="flex items-center gap-2">
+                              <span className={`font-bold ${
+                                index === 0 ? 'text-yellow-600' : 
+                                index === 1 ? 'text-gray-500' : 
+                                index === 2 ? 'text-orange-600' : 'text-gray-600'
+                              }`}>
+                                #{item.rank}
+                              </span>
+                              <span className="font-medium text-gray-700 truncate">
+                                {item.cv.full_name || 'Unnamed'}
+                              </span>
+                            </div>
+                            <span className="font-semibold text-blue-700">
+                              {item.intellectualScore} pts
+                            </span>
+                          </div>
+                        ))}
+                        {rankings.intellectual.length === 0 && (
+                          <p className="text-gray-500 text-sm">No data available</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Professional Rankings */}
+                    <div className="bg-green-50 p-3 rounded border border-green-200">
+                      <h4 className="font-semibold text-green-800 mb-2 flex items-center gap-1">
+                        👔 Professional Score Rankings
+                      </h4>
+                      <div className="space-y-1 max-h-60 overflow-y-auto">
+                        {rankings.professional.slice(0, 10).map((item, index) => (
+                          <div key={item.cv.id} className="flex items-center justify-between text-sm">
+                            <div className="flex items-center gap-2">
+                              <span className={`font-bold ${
+                                index === 0 ? 'text-yellow-600' : 
+                                index === 1 ? 'text-gray-500' : 
+                                index === 2 ? 'text-orange-600' : 'text-gray-600'
+                              }`}>
+                                #{item.rank}
+                              </span>
+                              <span className="font-medium text-gray-700 truncate">
+                                {item.cv.full_name || 'Unnamed'}
+                              </span>
+                            </div>
+                            <span className="font-semibold text-green-700">
+                              {item.professionalScore} pts
+                            </span>
+                          </div>
+                        ))}
+                        {rankings.professional.length === 0 && (
+                          <p className="text-gray-500 text-sm">No data available</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Overall Rankings */}
+                    <div className="bg-yellow-50 p-3 rounded border border-yellow-200">
+                      <h4 className="font-semibold text-yellow-800 mb-2 flex items-center gap-1">
+                        🏆 Overall Score Rankings
+                      </h4>
+                      <div className="space-y-1 max-h-60 overflow-y-auto">
+                        {rankings.overall.slice(0, 10).map((item, index) => (
+                          <div key={item.cv.id} className="flex items-center justify-between text-sm">
+                            <div className="flex items-center gap-2">
+                              <span className={`font-bold ${
+                                index === 0 ? 'text-yellow-600' : 
+                                index === 1 ? 'text-gray-500' : 
+                                index === 2 ? 'text-orange-600' : 'text-gray-600'
+                              }`}>
+                                #{item.rank}
+                              </span>
+                              <span className="font-medium text-gray-700 truncate">
+                                {item.cv.full_name || 'Unnamed'}
+                              </span>
+                            </div>
+                            <span className="font-semibold text-yellow-700">
+                              {item.totalPoints} pts
+                            </span>
+                          </div>
+                        ))}
+                        {rankings.overall.length === 0 && (
+                          <p className="text-gray-500 text-sm">No data available</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {showRankings && (
+                  <div className="mt-3 text-xs text-gray-500">
+                    💡 Rankings update automatically based on current year filter and point calculations. 
+                    Top 10 rankings shown. Gold (#1), Silver (#2), Bronze (#3) medals indicated.
+                  </div>
+                )}
+              </div>
+            </div>
+
                          {/* CV List */}
              <div className="space-y-4">
                {cvs.length === 0 ? (
@@ -597,6 +808,9 @@ const AdminView = () => {
                  </div>
                ) : (
                  <>
+                   <div className="text-sm text-gray-500 mb-2">
+                     💡 Click 'Show Rankings' to display ranking of users
+                   </div>
                    <div className="text-sm text-gray-600 mb-4">
                      Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalCount)} of {totalCount} CVs
                    </div>
@@ -610,6 +824,11 @@ const AdminView = () => {
                      
                      // Get filtered points if year filter is active
                      const filteredPointsData = filteredPoints[cv.id]
+                     
+                     // Find current rankings for this CV
+                     const intellectualRank = rankings.intellectual.find(r => r.cv.id === cv.id)
+                     const professionalRank = rankings.professional.find(r => r.cv.id === cv.id)
+                     const overallRank = rankings.overall.find(r => r.cv.id === cv.id)
                      
                      // Use filtered CV for display
                      const displayCV = filteredCV
@@ -627,6 +846,17 @@ const AdminView = () => {
                                    <span className="font-semibold text-gray-700">
                                      {filteredPointsData ? filteredPointsData.total_points : (cvWithPoints?.total_points || 0)} pts
                                    </span>
+                                   {/* Overall Rank */}
+                                   {overallRank && (
+                                     <span className={`text-xs font-bold px-2 py-1 rounded ${
+                                       overallRank.rank === 1 ? 'bg-yellow-100 text-yellow-700' :
+                                       overallRank.rank === 2 ? 'bg-gray-100 text-gray-700' :
+                                       overallRank.rank === 3 ? 'bg-orange-100 text-orange-700' :
+                                       'bg-blue-100 text-blue-700'
+                                     }`}>
+                                       #{overallRank.rank}
+                                     </span>
+                                   )}
                                  </div>
                                )}
                                
@@ -638,12 +868,34 @@ const AdminView = () => {
                                      <span className="font-semibold text-blue-700">
                                        {filteredPointsData ? filteredPointsData.intellectual_score : (cvWithCategorizedScores?.intellectual_score || 0)} pts
                                      </span>
+                                     {/* Intellectual Rank */}
+                                     {intellectualRank && (
+                                       <span className={`text-xs font-bold px-1 py-0.5 rounded ${
+                                         intellectualRank.rank === 1 ? 'bg-yellow-100 text-yellow-700' :
+                                         intellectualRank.rank === 2 ? 'bg-gray-100 text-gray-700' :
+                                         intellectualRank.rank === 3 ? 'bg-orange-100 text-orange-700' :
+                                         'bg-blue-100 text-blue-700'
+                                       }`}>
+                                         #{intellectualRank.rank}
+                                       </span>
+                                     )}
                                    </div>
                                    <div className="flex items-center gap-1">
                                      <span className="text-green-600 font-medium">Professional:</span>
                                      <span className="font-semibold text-green-700">
                                        {filteredPointsData ? filteredPointsData.professional_score : (cvWithCategorizedScores?.professional_score || 0)} pts
                                      </span>
+                                     {/* Professional Rank */}
+                                     {professionalRank && (
+                                       <span className={`text-xs font-bold px-1 py-0.5 rounded ${
+                                         professionalRank.rank === 1 ? 'bg-yellow-100 text-yellow-700' :
+                                         professionalRank.rank === 2 ? 'bg-gray-100 text-gray-700' :
+                                         professionalRank.rank === 3 ? 'bg-orange-100 text-orange-700' :
+                                         'bg-blue-100 text-blue-700'
+                                       }`}>
+                                         #{professionalRank.rank}
+                                       </span>
+                                     )}
                                    </div>
                                  </div>
                                )}

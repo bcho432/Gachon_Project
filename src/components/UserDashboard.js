@@ -312,7 +312,7 @@ const UserDashboard = () => {
               </div>
               <div className="ml-3">
                 <p className="text-sm text-yellow-800">
-                  <strong>Print Notice:</strong> Currently, the print CV for this dashboard creates duplicates. Please be aware of this if or when you try to print out your own CV on this page. You can still adjust for this once you hit print by typing in which pages you would like to print out.
+                  <strong>Print Notice:</strong> Currently, the print CV functionality does not work as intended. If for any reason you need a specific copy of your CV from here, please contact sungguri@gmail.com. Thank you for your patience.
                 </p>
               </div>
             </div>
