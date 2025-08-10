@@ -166,7 +166,7 @@ const ItemPointsManager = ({ cv, onPointsUpdate }) => {
     return items;
   };
 
-  // Merge items with points data
+  // Merge items with points data (prefer live CV item_data for display)
   const getMergedItems = () => {
     const allItems = getAllCVItems();
     const itemsWithPointsMap = new Map();
@@ -177,11 +177,14 @@ const ItemPointsManager = ({ cv, onPointsUpdate }) => {
       itemsWithPointsMap.set(key, item);
     });
     
-    // Merge all items with their points data
+    // Merge all items with their points data, but keep live item_data from CV
     return allItems.map(item => {
       const key = `${item.section_name}-${item.item_index}`;
       const itemWithPoints = itemsWithPointsMap.get(key);
-      return itemWithPoints || item;
+      if (itemWithPoints) {
+        return { ...itemWithPoints, item_data: item.item_data };
+      }
+      return item;
     });
   };
 

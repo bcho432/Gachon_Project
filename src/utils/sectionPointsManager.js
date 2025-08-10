@@ -130,7 +130,7 @@ export const getSectionPointsHistory = async (cvId) => {
 // Section names mapping for display
 export const SECTION_NAMES = {
   education: 'Education',
-  academic_employment: 'Academic Employment',
+  academic_employment: 'Employment History',
   teaching: 'Teaching',
   publications_research: 'Publications (Research)',
   publications_books: 'Publications (Books)',

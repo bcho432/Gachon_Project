@@ -17,7 +17,7 @@ const SectionPointsManager = ({ cv, onPointsUpdate }) => {
 
   const sections = [
     { key: 'education', label: 'Education', points: cv.education_points || 0 },
-    { key: 'academic_employment', label: 'Academic Employment', points: cv.academic_employment_points || 0 },
+  { key: 'academic_employment', label: 'Employment History', points: cv.academic_employment_points || 0 },
     { key: 'teaching', label: 'Teaching', points: cv.teaching_points || 0 },
     { key: 'publications_research', label: 'Publications (Research)', points: cv.publications_research_points || 0 },
     { key: 'publications_books', label: 'Publications (Books)', points: cv.publications_books_points || 0 },

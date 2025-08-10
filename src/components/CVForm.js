@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../supabase'
 import { Save, Plus, Trash2, GraduationCap, Briefcase, BookOpen, Users, Award, User, Building } from 'lucide-react'
+import { setPublicationIndexPoints } from '../utils/itemPointsManager'
 import toast from 'react-hot-toast'
 
 const CVForm = () => {
@@ -72,39 +73,16 @@ const CVForm = () => {
     
     setSaving(true)
     try {
-      // First, get the current CV to check if it exists
-      const { data: existingCV } = await supabase
+      // First, get the current CV to check if it exists (full record for snapshot)
+      const { data: existingCVFull } = await supabase
         .from('cvs')
-        .select('id')
+        .select('*')
         .eq('user_id', user.id)
         .single()
 
-      let cvId = existingCV?.id
+      let cvId = existingCVFull?.id
 
-      // If CV exists, save current version to history before updating
-      if (existingCV) {
-        // Get the latest version number
-        const { data: latestVersion } = await supabase
-          .from('cv_history')
-          .select('version_number')
-          .eq('cv_id', cvId)
-          .order('version_number', { ascending: false })
-          .limit(1)
-          .single()
-
-        const nextVersion = (latestVersion?.version_number || 0) + 1
-
-        // Save current version to history
-        await supabase
-          .from('cv_history')
-          .insert({
-            cv_id: cvId,
-            user_id: user.id,
-            email: user.email, // Use current user's email
-            ...formData,
-            version_number: nextVersion
-          })
-      }
+      // Only record the NEW snapshot after saving (no pre-update snapshot)
 
       // Update or insert the current CV
       const { data, error } = await supabase
@@ -121,17 +99,37 @@ const CVForm = () => {
       if (error) {
         toast.error('Error saving CV')
       } else {
-        // If this was a new CV, save the first version to history
-        if (!existingCV && data?.[0]?.id) {
-          await supabase
+        // Save NEW snapshot after upsert
+        if (data?.[0]?.id) {
+          const { data: latestAfter, error: latestAfterErr } = await supabase
+            .from('cv_history')
+            .select('version_number')
+            .eq('cv_id', data[0].id)
+            .order('version_number', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+
+          if (latestAfterErr && latestAfterErr.code !== 'PGRST116') {
+            console.error('Error fetching cv_history latest (after):', latestAfterErr)
+          }
+          const versionNew = (latestAfter?.version_number ?? 0) + 1
+
+          const { error: newErr } = await supabase
             .from('cv_history')
             .insert({
               cv_id: data[0].id,
               user_id: user.id,
-              email: user.email, // Use current user's email
+              email: user.email,
               ...formData,
-              version_number: 1
+              version_number: versionNew
             })
+
+          if (newErr) {
+            console.error('Error inserting new history snapshot:', newErr)
+            toast.error('Failed to write history snapshot')
+          } else {
+            toast.success(`History saved (v${versionNew})`)
+          }
         }
         toast.success('CV saved successfully!')
       }
@@ -299,12 +297,12 @@ const CVForm = () => {
               ))}
             </div>
 
-            {/* Academic Employment */}
+            {/* Employment History */}
             <div className="space-y-4">
               <div className="flex justify-between items-center">
                 <h2 className="text-xl font-semibold text-gray-900 flex items-center">
                   <Briefcase className="h-5 w-5 mr-2" />
-                  Academic Employment
+                  Employment History
                 </h2>
                 <button
                   onClick={() => addArrayItem('academic_employment')}
@@ -490,11 +488,33 @@ const CVForm = () => {
                       onChange={(e) => updateArrayField('publications_research', index, 'doi', e.target.value)}
                       className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                     />
-                    <select
-                      value={pub.index}
-                      onChange={(e) => updateArrayField('publications_research', index, 'index', e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    >
+                      <select
+                       value={pub.index}
+                       onChange={async (e) => {
+                         const newIndex = e.target.value
+                         updateArrayField('publications_research', index, 'index', newIndex)
+                         try {
+                           // If CV exists, apply index points immediately
+                           // Fetch or infer cvId by saving if needed; here we try immediate update if user has a CV row
+                           const { data: existingCV } = await supabase
+                             .from('cvs')
+                             .select('id')
+                             .eq('user_id', user.id)
+                             .maybeSingle()
+                           if (existingCV?.id) {
+                             await setPublicationIndexPoints({
+                               userId: user.id,
+                               cvId: existingCV.id,
+                               itemIndex: index,
+                               indexName: newIndex || 'Other'
+                             })
+                           }
+                         } catch (err) {
+                           // Non-blocking
+                         }
+                       }}
+                       className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                     >
                       <option value="">Select Index</option>
                       <option value="SSCI">SSCI</option>
                       <option value="SCOPUS">SCOPUS</option>

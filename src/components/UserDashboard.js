@@ -41,10 +41,10 @@ const CVPrintView = ({ cv, yearFilter = { from: '', to: '' } }) => {
         </div>
       )}
 
-      {/* Academic Employment */}
+      {/* Employment History */}
       {filteredCV.academic_employment && filteredCV.academic_employment.length > 0 && (
         <div>
-          <h2 className="text-xl font-bold text-gray-900 border-b border-gray-300 pb-2 mb-4">Academic Employment</h2>
+          <h2 className="text-xl font-bold text-gray-900 border-b border-gray-300 pb-2 mb-4">Employment History</h2>
           {filteredCV.academic_employment.map((job, index) => (
             <div key={index} className="mb-4">
               <div className="flex justify-between items-start">

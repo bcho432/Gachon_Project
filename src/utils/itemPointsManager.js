@@ -342,10 +342,195 @@ export const getItemPointsHistory = async (cvId) => {
   }
 };
 
+// Index-based points configuration (stored in a dedicated table)
+// Table: index_points_config { id serial, index_name text primary key, points int }
+// Default indices: SSCI, SCOPUS, KCI, Other
+export const getIndexPointsConfig = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('index_points_config')
+      .select('index_name, points');
+    if (error) {
+      console.error('Error fetching index points config:', error);
+      return { SSCI: 0, SCOPUS: 0, KCI: 0, Other: 0 };
+    }
+    const map = { SSCI: 0, SCOPUS: 0, KCI: 0, Other: 0 };
+    (data || []).forEach((row) => {
+      if (row.index_name && typeof row.points === 'number') {
+        map[row.index_name] = row.points;
+      }
+    });
+    return map;
+  } catch (e) {
+    console.error('Exception fetching index points config:', e);
+    return { SSCI: 0, SCOPUS: 0, KCI: 0, Other: 0 };
+  }
+};
+
+export const setIndexPointsConfig = async (indexName, points) => {
+  try {
+    const { error } = await supabase
+      .from('index_points_config')
+      .upsert({ index_name: indexName, points });
+    if (error) throw error;
+    return { success: true };
+  } catch (e) {
+    console.error('Error updating index points config:', e);
+    return { success: false, error: e };
+  }
+};
+
+// Helper: set or replace points for a specific publication item based on index selection
+export const setPublicationIndexPoints = async ({ userId, cvId, itemIndex, indexName }) => {
+  try {
+    // Read configured points
+    const config = await getIndexPointsConfig();
+    const targetPoints = config[indexName] ?? 0;
+
+    // Ensure we have the current CV to capture item_data
+    const { data: cv, error: cvErr } = await supabase
+      .from('cvs')
+      .select('*')
+      .eq('id', cvId)
+      .single();
+    if (cvErr) throw cvErr;
+
+    const itemData = Array.isArray(cv.publications_research) ? cv.publications_research[itemIndex] : null;
+
+    // Upsert into item_points with absolute points (replace existing value)
+    const { data: existing, error: getErr } = await supabase
+      .from('item_points')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('cv_id', cvId)
+      .eq('section_name', 'publications_research')
+      .eq('item_index', itemIndex)
+      .maybeSingle();
+    if (getErr && getErr.code !== 'PGRST116') throw getErr;
+
+    if (existing) {
+      const { error: updErr } = await supabase
+        .from('item_points')
+        .update({ points: targetPoints, reason: `Index: ${indexName}`, item_data: itemData })
+        .eq('id', existing.id);
+      if (updErr) throw updErr;
+    } else {
+      const { error: insErr } = await supabase
+        .from('item_points')
+        .insert({
+          user_id: userId,
+          cv_id: cvId,
+          section_name: 'publications_research',
+          item_index: itemIndex,
+          item_data: itemData,
+          points: targetPoints,
+          reason: `Index: ${indexName}`,
+        });
+      if (insErr) throw insErr;
+    }
+
+    // Add to history as a replacement (use delta = target - previous)
+    // Fetch latest after update
+    const { data: afterRec, error: afterErr } = await supabase
+      .from('item_points')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('cv_id', cvId)
+      .eq('section_name', 'publications_research')
+      .eq('item_index', itemIndex)
+      .single();
+    if (afterErr) throw afterErr;
+
+    const delta = targetPoints - ((existing?.points) ?? 0);
+    if (delta !== 0) {
+      const { error: histErr } = await supabase
+        .from('item_points_history')
+        .insert({
+          user_id: userId,
+          cv_id: cvId,
+          section_name: 'publications_research',
+          item_index: itemIndex,
+          points_change: delta,
+          reason: `Index set to ${indexName}`,
+        });
+      if (histErr) console.error('Error adding index points history:', histErr);
+    }
+
+    return { success: true, points: afterRec.points };
+  } catch (e) {
+    console.error('Error setting publication index points:', e);
+    return { success: false, error: e };
+  }
+};
+
+// Recalculate points for all publications based on current index_points_config
+export const recalcAllPublicationIndexPoints = async () => {
+  try {
+    const config = await getIndexPointsConfig();
+
+    // Fetch all item_points for publications
+    const { data: allPoints, error: ptsErr } = await supabase
+      .from('item_points')
+      .select('*')
+      .eq('section_name', 'publications_research');
+    if (ptsErr) throw ptsErr;
+
+    let updated = 0;
+    for (const row of allPoints || []) {
+      // Derive index from stored item_data, else look up from cvs
+      let indexName = row.item_data?.index;
+      if (!indexName) {
+        const { data: cv, error: cvErr } = await supabase
+          .from('cvs')
+          .select('publications_research')
+          .eq('id', row.cv_id)
+          .single();
+        if (!cvErr && Array.isArray(cv?.publications_research)) {
+          indexName = cv.publications_research[row.item_index]?.index;
+        }
+      }
+      const target = config[indexName] ?? config['Other'] ?? 0;
+      if (typeof target !== 'number') continue;
+
+      const current = row.points || 0;
+      if (current === target) continue;
+
+      // Update item_points
+      const { error: updErr } = await supabase
+        .from('item_points')
+        .update({ points: target, reason: `Index recalculation (${indexName || 'Other'})` })
+        .eq('id', row.id);
+      if (updErr) continue;
+
+      // Add history delta
+      const delta = target - current;
+      const { error: histErr } = await supabase
+        .from('item_points_history')
+        .insert({
+          user_id: row.user_id,
+          cv_id: row.cv_id,
+          section_name: 'publications_research',
+          item_index: row.item_index,
+          points_change: delta,
+          reason: 'Index config recalculation'
+        });
+      if (histErr) {
+        // Non-blocking
+      }
+      updated += 1;
+    }
+
+    return { success: true, updated };
+  } catch (e) {
+    console.error('Error recalculating publication index points:', e);
+    return { success: false, error: e };
+  }
+};
+
 // Section names mapping for display
 export const SECTION_NAMES = {
   education: 'Education',
-  academic_employment: 'Academic Employment',
+  academic_employment: 'Employment History',
   teaching: 'Teaching',
   publications_research: 'Publications (Research)',
   publications_books: 'Publications (Books)',

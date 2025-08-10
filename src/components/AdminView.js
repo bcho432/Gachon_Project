@@ -5,8 +5,17 @@ import toast from 'react-hot-toast'
 import { useReactToPrint } from 'react-to-print'
 import PerformanceMonitor from './PerformanceMonitor'
 import AdminManager from './AdminManager'
+import IndexPointsManager from './IndexPointsManager'
 import ItemPointsManager from './ItemPointsManager'
-import { getAllCVsWithItemPoints, getAllCVsWithCategorizedScores, getAllUsersWithCVStatus, filterCVByYear, calculateFilteredPoints, getCVItemsWithPoints } from '../utils/itemPointsManager'
+import { 
+  getAllCVsWithItemPoints, 
+  getAllCVsWithCategorizedScores, 
+  filterCVByYear, 
+  calculateFilteredPoints, 
+  getCVItemsWithPoints,
+  getItemDisplayText,
+  getSectionDisplayName
+} from '../utils/itemPointsManager'
 
 const AdminView = () => {
   const [cvs, setCvs] = useState([])
@@ -21,6 +30,11 @@ const AdminView = () => {
   const [showHistoryModal, setShowHistoryModal] = useState(false)
   const [cvHistory, setCvHistory] = useState([])
   const [selectedCVForHistory, setSelectedCVForHistory] = useState(null)
+  // Change Log state removed per request
+  const [showChangesModal, setShowChangesModal] = useState(false)
+  const [selectedCVForChanges, setSelectedCVForChanges] = useState(null)
+  const [contentChangeEntries, setContentChangeEntries] = useState([])
+  const [changesLoading, setChangesLoading] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
@@ -82,16 +96,7 @@ const AdminView = () => {
     loadAllCVs(1, debouncedSearchTerm)
   }, [debouncedSearchTerm, loadAllCVs])
 
-  // Periodically refresh CV data to ensure it's up to date
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (!loading) {
-        loadAllCVs(currentPage, debouncedSearchTerm);
-      }
-    }, 30000); // Refresh every 30 seconds
-
-    return () => clearInterval(interval);
-  }, [currentPage, debouncedSearchTerm, loading, loadAllCVs]);
+  // Periodic refresh removed per request
 
   const handlePageChange = (page) => {
     loadAllCVs(page, searchTerm)
@@ -165,6 +170,137 @@ const AdminView = () => {
     setCvHistory([])
   }
 
+  // Build a content change log from successive cv_history snapshots
+  const buildContentChangeLog = (cvHistoryEntries = []) => {
+    const entries = []
+
+    const stableStringify = (obj) => {
+      if (obj === null || obj === undefined) return String(obj)
+      if (typeof obj !== 'object') return JSON.stringify(obj)
+      if (Array.isArray(obj)) return `[${obj.map(stableStringify).join(',')}]`
+      const keys = Object.keys(obj).sort()
+      return `{${keys.map(k => `${JSON.stringify(k)}:${stableStringify(obj[k])}`).join(',')}}`
+    }
+
+    const arraySections = [
+      'education',
+      'academic_employment',
+      'teaching',
+      'publications_research',
+      'publications_books',
+      'conference_presentations',
+      'professional_service',
+      'internal_activities',
+    ]
+
+    const scalarFields = ['full_name', 'phone', 'email', 'address']
+
+    // Ensure ascending by version_number or created_at
+    const sorted = [...cvHistoryEntries].sort((a, b) => {
+      const av = a.version_number ?? 0
+      const bv = b.version_number ?? 0
+      if (av !== bv) return av - bv
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    })
+
+    for (let i = 1; i < sorted.length; i++) {
+      const previous = sorted[i - 1]
+      const current = sorted[i]
+      const when = current.created_at || current.updated_at
+
+      // Scalar field changes
+      scalarFields.forEach((field) => {
+        if (current[field] !== previous[field]) {
+          entries.push({
+            created_at: when,
+            description: `Updated ${field.replace('_', ' ')} from "${previous[field] || ''}" to "${current[field] || ''}"`
+          })
+        }
+      })
+
+      // Array section changes at per-index level
+      arraySections.forEach((section) => {
+        const currArr = Array.isArray(current[section]) ? current[section] : []
+        const prevArr = Array.isArray(previous[section]) ? previous[section] : []
+        const maxLen = Math.max(currArr.length, prevArr.length)
+
+        for (let idx = 0; idx < maxLen; idx++) {
+          const prevItem = prevArr[idx]
+          const currItem = currArr[idx]
+
+          if (prevItem !== undefined && currItem === undefined) {
+            entries.push({
+              created_at: when,
+              description: `Removed ${getSectionDisplayName(section)}: ${getItemDisplayText(section, prevItem)}`
+            })
+          } else if (prevItem === undefined && currItem !== undefined) {
+            entries.push({
+              created_at: when,
+              description: `Added ${getSectionDisplayName(section)}: ${getItemDisplayText(section, currItem)}`
+            })
+          } else if (prevItem !== undefined && currItem !== undefined) {
+            const prevStr = stableStringify(prevItem)
+            const currStr = stableStringify(currItem)
+            if (prevStr !== currStr) {
+              const fieldNames = Array.from(new Set([...Object.keys(prevItem || {}), ...Object.keys(currItem || {})]))
+              const changes = []
+              for (const field of fieldNames) {
+                const beforeVal = prevItem?.[field]
+                const afterVal = currItem?.[field]
+                if (stableStringify(beforeVal) !== stableStringify(afterVal)) {
+                  changes.push(`${field.replaceAll('_', ' ')}: "${beforeVal ?? ''}" → "${afterVal ?? ''}"`)
+                }
+              }
+              const itemLabel = getItemDisplayText(section, currItem)
+              entries.push({
+                created_at: when,
+                description: `Updated ${getSectionDisplayName(section)} (${itemLabel}) — ${changes.join('; ')}`
+              })
+            }
+          }
+        }
+      })
+    }
+
+    // Most recent first
+    entries.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    return entries
+  }
+
+  const openChangesModal = async (cv) => {
+    setSelectedCVForChanges(cv)
+    setShowChangesModal(true)
+    setChangesLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('cv_history')
+        .select('*')
+        .eq('cv_id', cv.id)
+        .order('version_number', { ascending: true })
+
+      if (error) {
+        console.error('Error loading CV history for changes:', error)
+        toast.error('Error loading CV changes')
+        setContentChangeEntries([])
+      } else {
+        const entries = buildContentChangeLog(data || [])
+        setContentChangeEntries(entries)
+      }
+    } catch (e) {
+      console.error('Exception building CV changes:', e)
+      toast.error('Error building CV changes')
+      setContentChangeEntries([])
+    } finally {
+      setChangesLoading(false)
+    }
+  }
+
+  const closeChangesModal = () => {
+    setShowChangesModal(false)
+    setSelectedCVForChanges(null)
+    setContentChangeEntries([])
+  }
+
   const handleDeleteCV = async (cv) => {
     if (!window.confirm(`Are you sure you want to delete ${cv.full_name}'s CV? This action cannot be undone.`)) {
       return
@@ -203,6 +339,10 @@ const AdminView = () => {
     }
   }
 
+  // Change Log builder removed per request
+
+  // Change Log handlers removed per request
+
   const handlePointsUpdate = async () => {
     // Refresh points data
     try {
@@ -219,10 +359,7 @@ const AdminView = () => {
     loadAllCVs(currentPage, debouncedSearchTerm);
   }
 
-  // Add a function to refresh CV data when needed
-  const refreshCVData = async () => {
-    await loadAllCVs(currentPage, debouncedSearchTerm);
-  }
+  // (Removed) refreshCVData helper was unused
 
   // Calculate filtered points for all CVs
   const calculateFilteredPointsForAllCVs = useCallback(async () => {
@@ -285,6 +422,11 @@ const AdminView = () => {
             {/* Admin Management */}
             <div className="mb-6">
               <AdminManager />
+            </div>
+
+            {/* Index Points Management */}
+            <div className="mb-6">
+              <IndexPointsManager />
             </div>
 
             {/* Points System Instructions */}
@@ -542,7 +684,14 @@ const AdminView = () => {
                              >
                                <History className="h-4 w-4 mr-1" />
                                History
-                             </button>
+                              </button>
+                              <button
+                                onClick={() => openChangesModal(cv)}
+                                className="flex items-center px-3 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                              >
+                                <Clock className="h-4 w-4 mr-1" />
+                                View CV Changes
+                              </button>
                              <button
                                onClick={() => handleDeleteCV(cv)}
                                className="flex items-center px-3 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
@@ -673,11 +822,46 @@ const AdminView = () => {
                      </div>
                    ))}
                  </div>
-               )}
+                )}
              </div>
            </div>
          </div>
        )}
+
+      {/* CV Content Changes Modal */}
+      {showChangesModal && selectedCVForChanges && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg max-w-3xl w-full mx-4 max-h-[90vh] overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+              <h2 className="text-xl font-semibold">{selectedCVForChanges.full_name}'s CV Changes</h2>
+              <button
+                onClick={closeChangesModal}
+                className="px-3 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+              >
+                Close
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
+              {changesLoading ? (
+                <div className="text-center py-6 text-gray-600">Loading changes...</div>
+              ) : contentChangeEntries.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">No changes found.</div>
+              ) : (
+                <div className="space-y-4">
+                  {contentChangeEntries.map((entry, idx) => (
+                    <div key={idx} className="border border-gray-200 rounded p-3">
+                      <div className="text-xs text-gray-500 mb-1">{new Date(entry.created_at).toLocaleString()}</div>
+                      <div className="text-sm text-gray-800">{entry.description}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Change Log removed per request */}
      </div>
    )
  }
@@ -719,10 +903,11 @@ const CVPrintView = ({ cv, yearFilter = { from: '', to: '' } }) => {
         </div>
       )}
 
-      {/* Academic Employment */}
+      {/* CV Content Changes Modal removed from CVPrintView */}
+      {/* Employment History */}
       {filteredCV.academic_employment && filteredCV.academic_employment.length > 0 && (
         <div>
-          <h2 className="text-xl font-bold text-gray-900 border-b border-gray-300 pb-2 mb-4">Academic Employment</h2>
+          <h2 className="text-xl font-bold text-gray-900 border-b border-gray-300 pb-2 mb-4">Employment History</h2>
           {filteredCV.academic_employment.map((job, index) => (
             <div key={index} className="mb-4">
               <div className="flex justify-between items-start">
@@ -840,6 +1025,7 @@ const CVPrintView = ({ cv, yearFilter = { from: '', to: '' } }) => {
             </div>
           ))
         )}
+      
       </div>
     </div>
   )
