@@ -401,6 +401,44 @@ const AdminView = () => {
     }
   }, [cvs, yearFilter]);
 
+  // Helper function to extract CV summary information
+  const getCVSummary = (cv) => {
+    const summary = {
+      latestEducation: null,
+      currentEmployment: []
+    };
+
+    // Get latest education (highest year)
+    if (cv.education && Array.isArray(cv.education) && cv.education.length > 0) {
+      const validEducation = cv.education.filter(edu => 
+        edu.degree && edu.institution && edu.year
+      );
+      
+      if (validEducation.length > 0) {
+        // Sort by year descending and get the latest
+        const sortedEducation = validEducation.sort((a, b) => {
+          const yearA = parseInt(a.year) || 0;
+          const yearB = parseInt(b.year) || 0;
+          return yearB - yearA;
+        });
+        summary.latestEducation = sortedEducation[0];
+      }
+    }
+
+    // Get current employment (where current is true or end_date is empty/future)
+    if (cv.academic_employment && Array.isArray(cv.academic_employment) && cv.academic_employment.length > 0) {
+      const currentYear = new Date().getFullYear();
+      summary.currentEmployment = cv.academic_employment.filter(emp => {
+        if (emp.current === true) return true;
+        if (!emp.end_date || emp.end_date === '') return true;
+        const endYear = parseInt(emp.end_date) || 0;
+        return endYear >= currentYear;
+      }).filter(emp => emp.position && emp.institution); // Only include entries with position and institution
+    }
+
+    return summary;
+  };
+
   // Calculate rankings for all CVs
   const calculateRankings = useCallback((pointsData = null) => {
     const dataToUse = pointsData || filteredPoints;
@@ -921,6 +959,69 @@ const AdminView = () => {
                                  </span>
                                )}
                              </div>
+                             
+                             {/* CV Summary */}
+                             {(() => {
+                               const summary = getCVSummary(cv);
+                               return (
+                                 <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                   <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1">
+                                     📋 CV Summary
+                                   </h4>
+                                   <div className="space-y-2 text-sm">
+                                     {/* Latest Education */}
+                                     {summary.latestEducation && (
+                                       <div className="flex items-start gap-2">
+                                         <span className="text-blue-600 font-medium min-w-[80px]">Education:</span>
+                                         <div className="flex-1">
+                                           <div className="font-medium text-gray-800">
+                                             {summary.latestEducation.degree}
+                                           </div>
+                                           <div className="text-gray-600">
+                                             {summary.latestEducation.institution} ({summary.latestEducation.year})
+                                           </div>
+                                           {summary.latestEducation.field && (
+                                             <div className="text-gray-500 text-xs">
+                                               Field: {summary.latestEducation.field}
+                                             </div>
+                                           )}
+                                         </div>
+                                       </div>
+                                     )}
+                                     
+                                     {/* Current Employment */}
+                                     {summary.currentEmployment.length > 0 && (
+                                       <div className="flex items-start gap-2">
+                                         <span className="text-green-600 font-medium min-w-[80px]">Current:</span>
+                                         <div className="flex-1 space-y-1">
+                                           {summary.currentEmployment.map((emp, index) => (
+                                             <div key={index} className="border-l-2 border-green-200 pl-2">
+                                               <div className="font-medium text-gray-800">
+                                                 {emp.position}
+                                               </div>
+                                               <div className="text-gray-600">
+                                                 {emp.institution}
+                                               </div>
+                                               {emp.start_date && (
+                                                 <div className="text-gray-500 text-xs">
+                                                   {emp.start_date}{emp.end_date && emp.end_date !== '' ? ` - ${emp.end_date}` : ' - Present'}
+                                                 </div>
+                                               )}
+                                             </div>
+                                           ))}
+                                         </div>
+                                       </div>
+                                     )}
+                                     
+                                     {!summary.latestEducation && summary.currentEmployment.length === 0 && (
+                                       <div className="text-gray-500 text-sm italic">
+                                         No education or employment information available
+                                       </div>
+                                     )}
+                                   </div>
+                                 </div>
+                               );
+                             })()}
                            </div>
                            <div className="flex space-x-2 ml-4">
                              <button
