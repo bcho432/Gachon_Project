@@ -3,6 +3,9 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { Toaster } from 'react-hot-toast'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import AuthForm from './components/AuthForm'
+import AuthCallback from './components/AuthCallback'
+import PasswordResetForm from './components/PasswordResetForm'
+import PasswordResetCallback from './components/PasswordResetCallback'
 import CVForm from './components/CVForm'
 import AdminView from './components/AdminView'
 import UserDashboard from './components/UserDashboard'
@@ -67,6 +70,18 @@ const AppContent = () => {
           <Route 
             path="/auth" 
             element={user ? <Navigate to="/" replace /> : <AuthForm />} 
+          />
+          <Route 
+            path="/auth/callback" 
+            element={<AuthCallback />} 
+          />
+          <Route 
+            path="/auth/reset-password" 
+            element={<PasswordResetForm />} 
+          />
+          <Route 
+            path="/auth/reset-password/callback" 
+            element={<PasswordResetCallback />} 
           />
           <Route 
             path="/" 

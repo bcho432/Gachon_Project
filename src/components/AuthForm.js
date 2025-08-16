@@ -24,7 +24,12 @@ const AuthForm = () => {
       if (error) {
         toast.error(error.message)
       } else {
-        toast.success(isLogin ? 'Welcome back!' : 'Account created successfully!')
+        if (isLogin) {
+          toast.success('Welcome back!')
+        } else {
+          // For signup, show a more specific message about email verification
+          toast.success('Account created successfully! Please check your email to verify your account before signing in.')
+        }
       }
     } catch (error) {
       toast.error('An unexpected error occurred')
@@ -56,8 +61,11 @@ const AuthForm = () => {
               </div>
               <div className="ml-3">
                 <p className="text-sm text-blue-800">
-                  <strong>READ:</strong> After you sign up, you will receive an email verification from 'Supabase'. Please click on the link to verify your email. You may be redirected to a page that doesn't exist, but don't worry—this means the verification was successful and you can now log in. If you don't receive an email, it most likely means that the email address has already been signed up. </p> <br></br>
-                  <p className="text-sm text-blue-800">If you have any questions, please email gachonhelper018@gmail.com or sungguri@gachon.ac.kr.
+                  <strong>Important:</strong> After signing up, you will receive an email verification link from Supabase. Click the link to verify your email address. Once verified, you can sign in to your account. If you don't receive the email, check your spam folder or try signing up again.
+                </p>
+                <br />
+                <p className="text-sm text-blue-800">
+                  If you have any questions, please email gachonhelper018@gmail.com or sungguri@gachon.ac.kr.
                 </p>
               </div>
             </div>
@@ -138,6 +146,19 @@ const AuthForm = () => {
               {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
             </button>
           </div>
+
+          {/* Forgot Password link for login form */}
+          {isLogin && (
+            <div className="text-center">
+              <button
+                type="button"
+                onClick={() => window.location.href = '/auth/reset-password'}
+                className="text-gray-600 hover:text-gray-500 text-sm"
+              >
+                Forgot your password?
+              </button>
+            </div>
+          )}
         </form>
       </div>
     </div>

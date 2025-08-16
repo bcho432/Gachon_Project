@@ -35,8 +35,41 @@ export const AuthProvider = ({ children }) => {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined,
+          data: {
+            // You can add additional user metadata here if needed
+          }
+        }
       })
-      return { data, error }
+      
+      // Handle specific error cases
+      if (error) {
+        // Check if it's a user already exists error
+        if (error.message.includes('User already registered')) {
+          return { 
+            data: null, 
+            error: { 
+              message: 'An account with this email already exists. Please try signing in instead.' 
+            } 
+          }
+        }
+        
+        // Check if it's an email confirmation error
+        if (error.message.includes('Email not confirmed') || error.message.includes('Invalid login credentials')) {
+          return { 
+            data: null, 
+            error: { 
+              message: 'Account created but email verification failed. Please check your email and try again, or contact support if the issue persists.' 
+            } 
+          }
+        }
+        
+        return { data, error }
+      }
+      
+      // Success case - account created and email sent
+      return { data, error: null }
     } catch (error) {
       console.error('Sign up error:', error)
       return { data: null, error }
@@ -96,11 +129,57 @@ export const AuthProvider = ({ children }) => {
     }
   }
 
+  const resetPassword = async (email) => {
+    try {
+      const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/reset-password/callback` : undefined
+      })
+      
+      if (error) {
+        // Handle specific error cases
+        if (error.message.includes('User not found')) {
+          return { 
+            data: null, 
+            error: { 
+              message: 'No account found with this email address. Please check your email or sign up for a new account.' 
+            } 
+          }
+        }
+        
+        return { data, error }
+      }
+      
+      return { data, error: null }
+    } catch (error) {
+      console.error('Password reset error:', error)
+      return { data: null, error }
+    }
+  }
+
+  const updatePassword = async (newPassword) => {
+    try {
+      const { data, error } = await supabase.auth.updateUser({
+        password: newPassword
+      })
+      
+      if (error) {
+        return { data, error }
+      }
+      
+      return { data, error: null }
+    } catch (error) {
+      console.error('Update password error:', error)
+      return { data: null, error }
+    }
+  }
+
   const value = {
     user,
     signUp,
     signIn,
     signOut,
+    resetPassword,
+    updatePassword,
     loading
   }
 

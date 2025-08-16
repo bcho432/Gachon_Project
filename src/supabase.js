@@ -23,7 +23,11 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     detectSessionInUrl: true,
     storage: typeof window !== 'undefined' ? window.localStorage : undefined,
-    storageKey: 'supabase.auth.token'
+    storageKey: 'supabase.auth.token',
+    // Add email confirmation settings
+    flowType: 'pkce',
+    // Set the redirect URL for email confirmation
+    redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined
   },
   global: {
     headers: {
