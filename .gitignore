@@ -21,6 +21,9 @@ complete-setup.sql
 supabase-setup.sql
 update-admin-policies.sql
 
+# Interview and personal documentation
+INTERVIEW_TALKING_POINTS.md
+
 # IDE and editor files
 .vscode/
 .idea/

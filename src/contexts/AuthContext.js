@@ -45,12 +45,81 @@ export const AuthProvider = ({ children }) => {
       
       // Handle specific error cases
       if (error) {
-        // Check if it's a user already exists error
-        if (error.message.includes('User already registered')) {
+        // Log the full error for debugging
+        console.error('Sign up error details:', {
+          message: error.message,
+          status: error.status,
+          code: error.code,
+          statusCode: error.statusCode,
+          fullError: error
+        })
+        
+        // Handle 500 errors (Supabase internal server error)
+        if (error.status === 500 ||
+            error.statusCode === 500 ||
+            error.code === 500 ||
+            (error.message && error.message.toLowerCase().includes('internal server error'))) {
+          console.error('Supabase 500 error details:', error)
           return { 
             data: null, 
             error: { 
-              message: 'An account with this email already exists. Please try signing in instead.' 
+              message: 'Authentication service is experiencing issues (500 error). This could be due to: 1) Database connection problems, 2) Supabase service issues, or 3) Configuration problems. Please check your Supabase dashboard for service status, or try again in a few minutes. If the problem persists, contact support.' 
+            } 
+          }
+        }
+        
+        // Check for network errors first (likely Supabase paused)
+        if (error.message?.includes('Failed to fetch') ||
+            error.message?.includes('NetworkError') ||
+            error.message?.includes('ERR_NAME_NOT_RESOLVED') ||
+            error.message?.includes('ERR_INTERNET_DISCONNECTED') ||
+            error.name === 'TypeError' ||
+            (error.message && error.message.toLowerCase().includes('network'))) {
+          return { 
+            data: null, 
+            error: { 
+              message: 'Unable to connect to the authentication service. This usually means your Supabase project is paused. Please check your Supabase dashboard and resume the project if it\'s paused.' 
+            } 
+          }
+        }
+        
+        // Check if it's a rate limit error (429) - check multiple possible formats
+        const isRateLimit = 
+          error.status === 429 || 
+          error.statusCode === 429 ||
+          error.code === 429 ||
+          error.code === 'over_email_send_rate_limit' ||
+          (error.message && (
+            error.message.toLowerCase().includes('rate limit') || 
+            error.message.toLowerCase().includes('too many requests') || 
+            error.message.toLowerCase().includes('rate limit exceeded') ||
+            error.message.toLowerCase().includes('429')
+          ))
+        
+        if (isRateLimit) {
+          return { 
+            data: null, 
+            error: { 
+              message: 'Email rate limit exceeded. This can happen if too many signup attempts were made recently. Please wait 30-60 minutes and try again, or contact support at gachonhelper018@gmail.com if you need immediate access.' 
+            } 
+          }
+        }
+        
+        // Check if it's a user already exists error
+        if (error.message.includes('User already registered') || 
+            error.message.includes('already been registered') ||
+            error.message.includes('already exists') ||
+            error.message.includes('already registered') ||
+            error.message.includes('user already exists') ||
+            error.message.includes('email already exists') ||
+            error.message.includes('already in use') ||
+            error.message.includes('duplicate key') ||
+            error.status === 422 ||
+            error.status === 400) {
+          return { 
+            data: null, 
+            error: { 
+              message: 'An account with this email address already exists. Please try signing in instead.' 
             } 
           }
         }
@@ -72,6 +141,19 @@ export const AuthProvider = ({ children }) => {
       return { data, error: null }
     } catch (error) {
       console.error('Sign up error:', error)
+      
+      // Catch network errors in the catch block too
+      if (error.message?.includes('Failed to fetch') ||
+          error.message?.includes('NetworkError') ||
+          error.name === 'TypeError') {
+        return { 
+          data: null, 
+          error: { 
+            message: 'Unable to connect to the authentication service. This usually means your Supabase project is paused. Please check your Supabase dashboard and resume the project if it\'s paused.' 
+          } 
+        }
+      }
+      
       return { data: null, error }
     }
   }
@@ -82,9 +164,56 @@ export const AuthProvider = ({ children }) => {
         email,
         password,
       })
+      
+      // Handle 500 errors (Supabase internal server error)
+      if (error && (
+        error.status === 500 ||
+        error.statusCode === 500 ||
+        error.code === 500 ||
+        (error.message && error.message.toLowerCase().includes('internal server error'))
+      )) {
+        console.error('Supabase 500 error details:', error)
+        return { 
+          data: null, 
+          error: { 
+            message: 'Authentication service is experiencing issues (500 error). This could be due to: 1) Database connection problems, 2) Supabase service issues, or 3) Configuration problems. Please check your Supabase dashboard for service status, or try again in a few minutes. If the problem persists, contact support.' 
+          } 
+        }
+      }
+      
+      // Handle network errors (likely Supabase paused)
+      if (error && (
+        error.message?.includes('Failed to fetch') ||
+        error.message?.includes('NetworkError') ||
+        error.message?.includes('ERR_NAME_NOT_RESOLVED') ||
+        error.message?.includes('ERR_INTERNET_DISCONNECTED') ||
+        error.name === 'TypeError' ||
+        (error.message && error.message.toLowerCase().includes('network'))
+      )) {
+        return { 
+          data: null, 
+          error: { 
+            message: 'Unable to connect to the authentication service. This usually means your Supabase project is paused. Please check your Supabase dashboard and resume the project if it\'s paused.' 
+          } 
+        }
+      }
+      
       return { data, error }
     } catch (error) {
       console.error('Sign in error:', error)
+      
+      // Catch network errors in the catch block too
+      if (error.message?.includes('Failed to fetch') ||
+          error.message?.includes('NetworkError') ||
+          error.name === 'TypeError') {
+        return { 
+          data: null, 
+          error: { 
+            message: 'Unable to connect to the authentication service. This usually means your Supabase project is paused. Please check your Supabase dashboard and resume the project if it\'s paused.' 
+          } 
+        }
+      }
+      
       return { data: null, error }
     }
   }

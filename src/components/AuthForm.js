@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { Lock, Mail, Eye, EyeOff } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -9,11 +9,20 @@ const AuthForm = () => {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  const isSubmittingRef = useRef(false) // Track submission state with ref
   
   const { signIn, signUp } = useAuth()
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    e.stopPropagation() // Prevent event bubbling
+    
+    // Prevent multiple submissions (works even with React Strict Mode)
+    if (loading || isSubmittingRef.current) {
+      return
+    }
+    
+    isSubmittingRef.current = true
     setLoading(true)
 
     try {
@@ -32,9 +41,11 @@ const AuthForm = () => {
         }
       }
     } catch (error) {
+      console.error('Auth form error:', error)
       toast.error('An unexpected error occurred')
     } finally {
       setLoading(false)
+      isSubmittingRef.current = false // Reset submission flag
     }
   }
 

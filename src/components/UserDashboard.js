@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../supabase'
 import { Eye, Printer, Award, TrendingUp, BookOpen, Users, Filter } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useReactToPrint } from 'react-to-print'
 import { calculateUserTotalPoints, filterCVByYear, calculateFilteredPoints, getCVItemsWithPoints } from '../utils/itemPointsManager'
 
 // CV Print View Component (same as in AdminView)
@@ -180,15 +181,12 @@ const UserDashboard = () => {
   const [filteredIntellectualScore, setFilteredIntellectualScore] = useState(0)
   const [filteredProfessionalScore, setFilteredProfessionalScore] = useState(0)
   const [filteredTotalScore, setFilteredTotalScore] = useState(0)
+  const printRef = useRef()
 
   // Load user's CV
-  useEffect(() => {
-    if (user) {
-      loadUserCV()
-    }
-  }, [user])
-
-  const loadUserCV = async () => {
+  const loadUserCV = useCallback(async () => {
+    if (!user) return
+    
     try {
       const { data, error } = await supabase
         .from('cvs')
@@ -226,11 +224,15 @@ const UserDashboard = () => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [user])
+
+  useEffect(() => {
+    loadUserCV()
+  }, [loadUserCV])
 
   // Calculate filtered points when year filter changes
-  const calculateFilteredPointsForUser = async () => {
-    if (!cv) return
+  const calculateFilteredPointsForUser = useCallback(async () => {
+    if (!cv || !user) return
 
     try {
       // Get item points for this CV (same as admin view)
@@ -254,14 +256,17 @@ const UserDashboard = () => {
       setFilteredProfessionalScore(points.professional)
       setFilteredTotalScore(points.total)
     }
-  }
+  }, [cv, yearFilter, user])
 
   // Update filtered points when year filter changes
   useEffect(() => {
-    if (cv) {
-      calculateFilteredPointsForUser()
-    }
-  }, [yearFilter, cv])
+    calculateFilteredPointsForUser()
+  }, [calculateFilteredPointsForUser])
+
+  const handlePrint = useReactToPrint({
+    content: () => printRef.current,
+    documentTitle: `${filteredCV?.full_name || 'CV'} - CV Manager`,
+  })
 
   const openPrintModal = () => {
     setShowPrintModal(true)
@@ -301,24 +306,6 @@ const UserDashboard = () => {
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-4xl mx-auto px-4">
-        {/* Print Warning Message - At the very top */}
-        {!showPrintModal && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 mb-6">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <p className="text-sm text-yellow-800">
-                  <strong>Print Notice:</strong> Currently, the print CV functionality does not work as intended. If for any reason you need a specific copy of your CV from here, please contact sungguri@gmail.com. Thank you for your patience.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Header */}
         <div className="bg-white rounded-lg shadow p-6 mb-6">
           <div className="flex justify-between items-start">
@@ -502,9 +489,9 @@ const UserDashboard = () => {
 
       {/* Print Modal */}
       {showPrintModal && filteredCV && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 no-print">
           <div className="bg-white rounded-lg max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center no-print">
               <h2 className="text-xl font-semibold">
                 {filteredCV.full_name}'s CV
                 {yearFilter.from || yearFilter.to ? (
@@ -513,7 +500,7 @@ const UserDashboard = () => {
               </h2>
               <div className="flex space-x-2">
                 <button
-                  onClick={() => window.print()}
+                  onClick={handlePrint}
                   className="flex items-center px-3 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
                 >
                   <Printer className="h-4 w-4 mr-2" />
@@ -528,11 +515,13 @@ const UserDashboard = () => {
               </div>
             </div>
             <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
+              <div ref={printRef}>
                 <CVPrintView cv={filteredCV} yearFilter={yearFilter} />
               </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
         </div>
     </div>
   )
