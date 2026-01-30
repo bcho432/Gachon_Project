@@ -33,25 +33,15 @@ code {
     padding: 0;
   }
   
-  /* First page - normal margins */
-  @page :first {
-    margin-top: 1in;
-    margin-bottom: 1in;
-    margin-left: 1in;
-    margin-right: 1in;
-  }
-  
-  /* Subsequent pages - extra top padding */
+  /* All pages - margins with extra top padding for pages after first */
   @page {
-    margin-top: 1.5in;
-    margin-bottom: 1in;
-    margin-left: 1in;
-    margin-right: 1in;
+    margin: 1.5in 1in 1in 1in;
   }
   
   .print-content {
     margin: 0 !important;
     padding: 0 !important;
+    padding-top: 0.5in !important;
     max-width: none !important;
   }
   
