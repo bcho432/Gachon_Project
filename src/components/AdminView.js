@@ -46,6 +46,7 @@ const AdminView = () => {
   const [rankings, setRankings] = useState({
     intellectual: [],
     professional: [],
+    course: [],
     overall: []
   })
   const [showRankings, setShowRankings] = useState(false)
@@ -194,6 +195,7 @@ const AdminView = () => {
       'education',
       'academic_employment',
       'teaching',
+      'courses',
       'publications_research',
       'publications_books',
       'conference_presentations',
@@ -458,14 +460,21 @@ const AdminView = () => {
         filteredPointsData.professional_score : 
         (cvWithCategorizedScores?.professional_score || 0);
       
+      const courseScore = filteredPointsData ? 
+        (filteredPointsData.course_score || 0) : 
+        (cvWithCategorizedScores?.course_score || 0);
+      
+      // Calculate total points: if filtered data exists, use it; otherwise sum all categories
+      // This ensures course scores are always included
       const totalPoints = filteredPointsData ? 
         filteredPointsData.total_points : 
-        (cvWithPoints?.total_points || 0);
+        (intellectualScore + professionalScore + courseScore);
       
       allCVsWithPoints.push({
         cv,
         intellectualScore,
         professionalScore,
+        courseScore,
         totalPoints
       });
     });
@@ -502,11 +511,13 @@ const AdminView = () => {
     // Calculate rankings with proper tie handling
     const intellectualRankings = assignRanks(allCVsWithPoints, 'intellectualScore');
     const professionalRankings = assignRanks(allCVsWithPoints, 'professionalScore');
+    const courseRankings = assignRanks(allCVsWithPoints, 'courseScore');
     const overallRankings = assignRanks(allCVsWithPoints, 'totalPoints');
     
     setRankings({
       intellectual: intellectualRankings,
       professional: professionalRankings,
+      course: courseRankings,
       overall: overallRankings
     });
   }, [cvs, cvsWithItemPoints, cvsWithCategorizedScores, filteredPoints]);
@@ -730,7 +741,7 @@ const AdminView = () => {
                 </div>
                 
                 {showRankings && (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     {/* Intellectual Rankings */}
                     <div className="bg-blue-50 p-3 rounded border border-blue-200">
                       <h4 className="font-semibold text-blue-800 mb-2 flex items-center gap-1">
@@ -788,6 +799,37 @@ const AdminView = () => {
                           </div>
                         ))}
                         {rankings.professional.length === 0 && (
+                          <p className="text-gray-500 text-sm">No data available</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Teaching Rankings */}
+                    <div className="bg-purple-50 p-3 rounded border border-purple-200">
+                      <h4 className="font-semibold text-purple-800 mb-2 flex items-center gap-1">
+                        📚 Teaching Score Rankings
+                      </h4>
+                      <div className="space-y-1 max-h-60 overflow-y-auto">
+                        {rankings.course.slice(0, 10).map((item, index) => (
+                          <div key={item.cv.id} className="flex items-center justify-between text-sm">
+                            <div className="flex items-center gap-2">
+                              <span className={`font-bold ${
+                                index === 0 ? 'text-yellow-600' : 
+                                index === 1 ? 'text-gray-500' : 
+                                index === 2 ? 'text-orange-600' : 'text-gray-600'
+                              }`}>
+                                #{item.rank}
+                              </span>
+                              <span className="font-medium text-gray-700 truncate">
+                                {item.cv.full_name || 'Unnamed'}
+                              </span>
+                            </div>
+                            <span className="font-semibold text-purple-700">
+                              {item.courseScore} pts
+                            </span>
+                          </div>
+                        ))}
+                        {rankings.course.length === 0 && (
                           <p className="text-gray-500 text-sm">No data available</p>
                         )}
                       </div>
@@ -866,6 +908,7 @@ const AdminView = () => {
                      // Find current rankings for this CV
                      const intellectualRank = rankings.intellectual.find(r => r.cv.id === cv.id)
                      const professionalRank = rankings.professional.find(r => r.cv.id === cv.id)
+                     const courseRank = rankings.course.find(r => r.cv.id === cv.id)
                      const overallRank = rankings.overall.find(r => r.cv.id === cv.id)
                      
                      // Use filtered CV for display
@@ -878,11 +921,15 @@ const AdminView = () => {
                              <div className="flex items-center gap-3 mb-2">
                                <h3 className="text-lg font-semibold text-gray-900">{cv.full_name || 'Unnamed'}</h3>
                                {/* Total Points Display */}
-                               {(filteredPointsData || cvWithPoints) && (
+                               {(filteredPointsData || cvWithCategorizedScores) && (
                                  <div className="flex items-center gap-2">
                                    <Award className="h-4 w-4 text-yellow-500" />
                                    <span className="font-semibold text-gray-700">
-                                     {filteredPointsData ? filteredPointsData.total_points : (cvWithPoints?.total_points || 0)} pts
+                                     {filteredPointsData ? filteredPointsData.total_points : (
+                                       (cvWithCategorizedScores?.intellectual_score || 0) + 
+                                       (cvWithCategorizedScores?.professional_score || 0) + 
+                                       (cvWithCategorizedScores?.course_score || 0)
+                                     )} pts
                                    </span>
                                    {/* Overall Rank */}
                                    {overallRank && (
@@ -932,6 +979,23 @@ const AdminView = () => {
                                          'bg-blue-100 text-blue-700'
                                        }`}>
                                          #{professionalRank.rank}
+                                       </span>
+                                     )}
+                                   </div>
+                                   <div className="flex items-center gap-1">
+                                     <span className="text-purple-600 font-medium">Teaching:</span>
+                                     <span className="font-semibold text-purple-700">
+                                       {filteredPointsData ? (filteredPointsData.course_score || 0) : (cvWithCategorizedScores?.course_score || 0)} pts
+                                     </span>
+                                     {/* Teaching Rank */}
+                                     {courseRank && (
+                                       <span className={`text-xs font-bold px-1 py-0.5 rounded ${
+                                         courseRank.rank === 1 ? 'bg-yellow-100 text-yellow-700' :
+                                         courseRank.rank === 2 ? 'bg-gray-100 text-gray-700' :
+                                         courseRank.rank === 3 ? 'bg-orange-100 text-orange-700' :
+                                         'bg-purple-100 text-purple-700'
+                                       }`}>
+                                         #{courseRank.rank}
                                        </span>
                                      )}
                                    </div>
@@ -1288,6 +1352,25 @@ const CVPrintView = ({ cv, yearFilter = { from: '', to: '' } }) => {
                   <p className="font-semibold">{course.course}</p>
                   <p className="text-gray-600">{course.institution}</p>
                   {course.description && <p className="text-gray-500 text-sm mt-1">{course.description}</p>}
+                </div>
+                <p className="text-gray-600">{course.year}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Courses (Credit Hours) */}
+      {filteredCV.courses && filteredCV.courses.length > 0 && (
+        <div>
+          <h2 className="text-xl font-bold text-gray-900 border-b border-gray-300 pb-2 mb-4">Courses (Credit Hours)</h2>
+          {filteredCV.courses.map((course, index) => (
+            <div key={index} className="mb-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="font-semibold">{course.course}</p>
+                  <p className="text-gray-600">{course.institution}</p>
+                  {course.credit_hours && <p className="text-gray-500 text-sm mt-1">Credit Hours: {course.credit_hours}</p>}
                 </div>
                 <p className="text-gray-600">{course.year}</p>
               </div>

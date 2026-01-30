@@ -81,6 +81,25 @@ const CVPrintView = ({ cv, yearFilter = { from: '', to: '' } }) => {
         </div>
       )}
 
+      {/* Courses (Credit Hours) */}
+      {filteredCV.courses && filteredCV.courses.length > 0 && (
+        <div>
+          <h2 className="text-xl font-bold text-gray-900 border-b border-gray-300 pb-2 mb-4">Courses (Credit Hours)</h2>
+          {filteredCV.courses.map((course, index) => (
+            <div key={index} className="mb-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="font-semibold">{course.course}</p>
+                  <p className="text-gray-600">{course.institution}</p>
+                  {course.credit_hours && <p className="text-gray-500 text-sm mt-1">Credit Hours: {course.credit_hours}</p>}
+                </div>
+                <p className="text-gray-600">{course.year}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Research Publications */}
       {filteredCV.publications_research && filteredCV.publications_research.length > 0 && (
         <div>
@@ -175,11 +194,13 @@ const UserDashboard = () => {
   const [showPrintModal, setShowPrintModal] = useState(false)
   const [intellectualScore, setIntellectualScore] = useState(0)
   const [professionalScore, setProfessionalScore] = useState(0)
+  const [courseScore, setCourseScore] = useState(0)
   const [totalScore, setTotalScore] = useState(0)
   const [yearFilter, setYearFilter] = useState({ from: '', to: '' })
   const [filteredCV, setFilteredCV] = useState(null)
   const [filteredIntellectualScore, setFilteredIntellectualScore] = useState(0)
   const [filteredProfessionalScore, setFilteredProfessionalScore] = useState(0)
+  const [filteredCourseScore, setFilteredCourseScore] = useState(0)
   const [filteredTotalScore, setFilteredTotalScore] = useState(0)
   const printRef = useRef()
 
@@ -196,7 +217,12 @@ const UserDashboard = () => {
 
       if (error && error.code !== 'PGRST116') {
         console.error('Error loading CV:', error)
-        toast.error('Error loading your CV')
+        // Check if it's a 406 error (column doesn't exist)
+        if (error.status === 406 || error.message?.includes('courses') || error.message?.includes('column')) {
+          toast.error('Database migration required! Please run migrations/add_courses_column.sql in Supabase SQL Editor.', { duration: 8000 })
+        } else {
+          toast.error('Error loading your CV')
+        }
         return
       }
 
@@ -210,12 +236,14 @@ const UserDashboard = () => {
         
         setIntellectualScore(points.intellectual)
         setProfessionalScore(points.professional)
+        setCourseScore(points.course || 0)
         setTotalScore(points.total)
         
         // Set initial filtered data
         setFilteredCV(data)
         setFilteredIntellectualScore(points.intellectual)
         setFilteredProfessionalScore(points.professional)
+        setFilteredCourseScore(points.course || 0)
         setFilteredTotalScore(points.total)
       }
     } catch (error) {
@@ -247,6 +275,7 @@ const UserDashboard = () => {
       
       setFilteredIntellectualScore(filteredPoints.intellectual_score)
       setFilteredProfessionalScore(filteredPoints.professional_score)
+      setFilteredCourseScore(filteredPoints.course_score || 0)
       setFilteredTotalScore(filteredPoints.total_points)
     } catch (error) {
       console.error('Error calculating filtered points:', error)
@@ -254,6 +283,7 @@ const UserDashboard = () => {
       const points = await calculateUserTotalPoints(user.id)
       setFilteredIntellectualScore(points.intellectual)
       setFilteredProfessionalScore(points.professional)
+      setFilteredCourseScore(points.course || 0)
       setFilteredTotalScore(points.total)
     }
   }, [cv, yearFilter, user])
@@ -384,7 +414,7 @@ const UserDashboard = () => {
         </div>
 
         {/* Score Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
           {/* Total Score */}
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center justify-between">
@@ -441,6 +471,26 @@ const UserDashboard = () => {
                 )}
               </div>
               <Users className="h-8 w-8 text-green-600" />
+            </div>
+          </div>
+
+          {/* Teaching Score */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">
+                  Teaching Score
+                  {yearFilter.from || yearFilter.to ? (
+                    <span className="ml-2 text-xs text-blue-600">(Filtered)</span>
+                  ) : null}
+                </p>
+                <p className="text-3xl font-bold text-purple-600">{filteredCourseScore}</p>
+                <p className="text-xs text-gray-500">Credit Hours (1 hour = 1 credit)</p>
+                {(yearFilter.from || yearFilter.to) && filteredCourseScore !== courseScore && (
+                  <p className="text-xs text-gray-500">Total: {courseScore}</p>
+                )}
+              </div>
+              <BookOpen className="h-8 w-8 text-purple-600" />
             </div>
           </div>
         </div>

@@ -532,6 +532,7 @@ export const SECTION_NAMES = {
   education: 'Education',
   academic_employment: 'Employment History',
   teaching: 'Teaching',
+  courses: 'Courses (Credit Hours)',
   publications_research: 'Publications (Research)',
   publications_books: 'Publications (Books)',
   conference_presentations: 'Conference Presentations',
@@ -555,6 +556,9 @@ export const getItemDisplayText = (sectionName, itemData) => {
       return `${itemData.position || 'Position'} at ${itemData.institution || 'Institution'}`;
     case 'teaching':
       return `${itemData.course || 'Course'} - ${itemData.institution || 'Institution'}`;
+    case 'courses':
+      const creditHours = itemData.credit_hours ? ` (${itemData.credit_hours} credits)` : '';
+      return `${itemData.course || 'Course'} - ${itemData.institution || 'Institution'}${creditHours}`;
     case 'publications_research':
       const indexText = itemData.index ? ` (${itemData.index})` : '';
       return `${itemData.title || 'Research Publication'}${indexText}`;
@@ -589,6 +593,30 @@ export const calculateProfessionalScore = (itemPoints) => {
     .reduce((sum, item) => sum + (item.points || 0), 0);
 };
 
+// Calculate Course Score (from courses section - 1 credit hour = 1 point)
+// Optionally includes bonus points from item_points table
+export const calculateCourseScore = (cv, itemPoints = []) => {
+  let score = 0;
+  
+  // Add credit hours from courses array
+  if (cv && cv.courses && Array.isArray(cv.courses)) {
+    score += cv.courses.reduce((sum, course) => {
+      const creditHours = parseFloat(course.credit_hours) || 0;
+      return sum + creditHours;
+    }, 0);
+  }
+  
+  // Add bonus points from item_points table for courses
+  if (Array.isArray(itemPoints)) {
+    const courseBonusPoints = itemPoints
+      .filter(point => point.section_name === 'courses')
+      .reduce((sum, point) => sum + (point.points || 0), 0);
+    score += courseBonusPoints;
+  }
+  
+  return score;
+};
+
 // Get all CVs with categorized scores
 export const getAllCVsWithCategorizedScores = async () => {
   try {
@@ -614,7 +642,8 @@ export const getAllCVsWithCategorizedScores = async () => {
         ...cv, 
         total_points: 0,
         intellectual_score: 0,
-        professional_score: 0
+        professional_score: 0,
+        course_score: 0
       }));
     }
 
@@ -622,11 +651,18 @@ export const getAllCVsWithCategorizedScores = async () => {
     const cvPointsMap = {};
     const cvIntellectualMap = {};
     const cvProfessionalMap = {};
+    const cvCourseMap = {};
 
     itemPoints.forEach(point => {
       const cvId = point.cv_id;
       
-      // Total points
+      // Skip course points here - they'll be added via calculateCourseScore
+      // This prevents double counting since course points are included in course score
+      if (point.section_name === 'courses') {
+        return;
+      }
+      
+      // Total points (excluding courses - they're added separately)
       if (!cvPointsMap[cvId]) {
         cvPointsMap[cvId] = 0;
       }
@@ -649,6 +685,17 @@ export const getAllCVsWithCategorizedScores = async () => {
       }
     });
 
+    // Calculate course scores from CV data (credit hours + bonus points from item_points)
+    cvs.forEach(cv => {
+      const cvItemPoints = itemPoints.filter(p => p.cv_id === cv.id);
+      cvCourseMap[cv.id] = calculateCourseScore(cv, cvItemPoints);
+      // Add course score to total points
+      if (!cvPointsMap[cv.id]) {
+        cvPointsMap[cv.id] = 0;
+      }
+      cvPointsMap[cv.id] += cvCourseMap[cv.id];
+    });
+
     return cvs.map(cv => ({
       cv_id: cv.id,
       user_id: cv.user_id,
@@ -657,6 +704,7 @@ export const getAllCVsWithCategorizedScores = async () => {
       total_points: cvPointsMap[cv.id] || 0,
       intellectual_score: cvIntellectualMap[cv.id] || 0,
       professional_score: cvProfessionalMap[cv.id] || 0,
+      course_score: cvCourseMap[cv.id] || 0,
       updated_at: cv.updated_at
     }));
   } catch (error) {
@@ -736,6 +784,7 @@ export const filterCVByYear = (cv, yearFilter) => {
   filteredCV.education = cv.education || []; // Education is always shown regardless of year filter
   filteredCV.academic_employment = filterByYear(cv.academic_employment, 'start_date', 'end_date');
   filteredCV.teaching = filterByYear(cv.teaching);
+  filteredCV.courses = filterByYear(cv.courses);
   filteredCV.publications_research = filterByYear(cv.publications_research);
   filteredCV.publications_books = filterByYear(cv.publications_books);
   filteredCV.conference_presentations = filterByYear(cv.conference_presentations);
@@ -749,10 +798,16 @@ export const filterCVByYear = (cv, yearFilter) => {
 export const calculateFilteredPoints = (cv, itemPoints, yearFilter) => {
   if (!yearFilter.from && !yearFilter.to) {
     // No filter, return original points
+    const courseItemPoints = itemPoints.filter(p => p.section_name === 'courses');
+    const courseScore = calculateCourseScore(cv, courseItemPoints);
+    // Calculate item points total excluding course points (since they're in courseScore)
+    const nonCourseItemPoints = itemPoints.filter(p => p.section_name !== 'courses');
+    const itemPointsTotal = nonCourseItemPoints.reduce((sum, point) => sum + point.points, 0);
     return {
-      total_points: itemPoints.reduce((sum, point) => sum + point.points, 0),
+      total_points: itemPointsTotal + courseScore,
       intellectual_score: calculateIntellectualScore(itemPoints),
-      professional_score: calculateProfessionalScore(itemPoints)
+      professional_score: calculateProfessionalScore(itemPoints),
+      course_score: courseScore
     };
   }
 
@@ -803,10 +858,22 @@ export const calculateFilteredPoints = (cv, itemPoints, yearFilter) => {
     }
   });
 
+  // Calculate course score from filtered CV data (credit hours + bonus points)
+  const filteredCV = filterCVByYear(cv, yearFilter);
+  // Filter course item points by year
+  const courseItemPoints = filteredItemPoints.filter(p => p.section_name === 'courses');
+  const courseScore = calculateCourseScore(filteredCV, courseItemPoints);
+
+  // Calculate item points total excluding course points (since they're in courseScore)
+  const nonCourseFilteredItemPoints = filteredItemPoints.filter(p => p.section_name !== 'courses');
+  const itemPointsTotal = nonCourseFilteredItemPoints.reduce((sum, point) => sum + point.points, 0);
+  const totalPoints = itemPointsTotal + courseScore;
+
   return {
-    total_points: filteredItemPoints.reduce((sum, point) => sum + point.points, 0),
+    total_points: totalPoints,
     intellectual_score: calculateIntellectualScore(filteredItemPoints),
-    professional_score: calculateProfessionalScore(filteredItemPoints)
+    professional_score: calculateProfessionalScore(filteredItemPoints),
+    course_score: courseScore
   };
 }; 
 
@@ -837,31 +904,46 @@ export const calculateUserTotalPoints = async (userId) => {
     const itemPoints = await getUserItemPoints(userId)
     console.log('Retrieved item points:', itemPoints)
     
+    // Get CV data to calculate course score
+    const { data: cvData, error: cvError } = await supabase
+      .from('cvs')
+      .select('courses')
+      .eq('user_id', userId)
+      .single()
+    
+    const cv = cvError ? null : cvData
+    
     // Calculate intellectual score (research, books, education, conferences)
     const intellectualPoints = itemPoints
       .filter(point => ['publications_research', 'publications_books', 'education', 'conference_presentations'].includes(point.section_name))
       .reduce((sum, point) => sum + point.points, 0)
     
-    // Calculate professional score (teaching, professional_service)
+    // Calculate professional score (teaching, professional_service, internal_activities)
     const professionalPoints = itemPoints
-      .filter(point => ['teaching', 'professional_service'].includes(point.section_name))
+      .filter(point => ['teaching', 'professional_service', 'internal_activities'].includes(point.section_name))
       .reduce((sum, point) => sum + point.points, 0)
     
-    const totalPoints = intellectualPoints + professionalPoints
+    // Calculate course score (from credit hours + bonus points from item_points)
+    const courseItemPoints = itemPoints.filter(p => p.section_name === 'courses');
+    const coursePoints = calculateCourseScore(cv, courseItemPoints)
     
-    console.log('Calculated scores:', { total: totalPoints, intellectual: intellectualPoints, professional: professionalPoints })
+    const totalPoints = intellectualPoints + professionalPoints + coursePoints
+    
+    console.log('Calculated scores:', { total: totalPoints, intellectual: intellectualPoints, professional: professionalPoints, course: coursePoints })
     
     return {
       total: totalPoints,
       intellectual: intellectualPoints,
-      professional: professionalPoints
+      professional: professionalPoints,
+      course: coursePoints
     }
   } catch (error) {
     console.error('Error calculating user total points:', error)
     return {
       total: 0,
       intellectual: 0,
-      professional: 0
+      professional: 0,
+      course: 0
     }
   }
 }; 
