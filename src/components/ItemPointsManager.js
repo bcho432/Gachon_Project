@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Award, Settings, History, Plus, Minus, CheckCircle } from 'lucide-react';
-import { addItemPoints, subtractItemPoints, getCVItemsWithPoints, getItemPointsHistory, getSectionDisplayName, getItemDisplayText, calculateCourseScore } from '../utils/itemPointsManager';
+import { addItemPoints, subtractItemPoints, getCVItemsWithPoints, getItemPointsHistory, getSectionDisplayName, getItemDisplayText, calculateTeachingScore } from '../utils/itemPointsManager';
 
 const ItemPointsManager = ({ cv, onPointsUpdate }) => {
   const [showDropdown, setShowDropdown] = useState(false);
@@ -85,20 +85,6 @@ const ItemPointsManager = ({ cv, onPointsUpdate }) => {
         if (hasContent(item)) {
           items.push({
             section_name: 'teaching',
-            item_index: index,
-            item_data: item,
-            points: 0
-          });
-        }
-      });
-    }
-    
-    // Add courses items
-    if (cv.courses && Array.isArray(cv.courses) && cv.courses.length > 0) {
-      cv.courses.forEach((item, index) => {
-        if (hasContent(item)) {
-          items.push({
-            section_name: 'courses',
             item_index: index,
             item_data: item,
             points: 0
@@ -300,20 +286,20 @@ const ItemPointsManager = ({ cv, onPointsUpdate }) => {
   };
 
   const getTotalPoints = () => {
-    // Sum points from item_points table (excluding courses - they're handled separately)
+    // Sum points from item_points table (excluding teaching - they're handled separately)
     const itemPointsTotal = getMergedItems()
-      .filter(item => item.section_name !== 'courses')
+      .filter(item => item.section_name !== 'teaching')
       .reduce((sum, item) => sum + (item.points || 0), 0);
     
-    // Add course credit hours (from courses array)
-    const courseCreditHours = calculateCourseScore(cv);
+    // Add teaching credit hours (from teaching array)
+    const teachingCreditHours = calculateTeachingScore(cv);
     
-    // Add course bonus points from item_points table
-    const courseBonusPoints = getMergedItems()
-      .filter(item => item.section_name === 'courses')
+    // Add teaching bonus points from item_points table
+    const teachingBonusPoints = getMergedItems()
+      .filter(item => item.section_name === 'teaching')
       .reduce((sum, item) => sum + (item.points || 0), 0);
     
-    return itemPointsTotal + courseCreditHours + courseBonusPoints;
+    return itemPointsTotal + teachingCreditHours + teachingBonusPoints;
   };
 
   return (

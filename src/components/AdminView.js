@@ -46,7 +46,7 @@ const AdminView = () => {
   const [rankings, setRankings] = useState({
     intellectual: [],
     professional: [],
-    course: [],
+    teaching: [],
     overall: []
   })
   const [showRankings, setShowRankings] = useState(false)
@@ -195,7 +195,6 @@ const AdminView = () => {
       'education',
       'academic_employment',
       'teaching',
-      'courses',
       'publications_research',
       'publications_books',
       'conference_presentations',
@@ -460,21 +459,21 @@ const AdminView = () => {
         filteredPointsData.professional_score : 
         (cvWithCategorizedScores?.professional_score || 0);
       
-      const courseScore = filteredPointsData ? 
-        (filteredPointsData.course_score || 0) : 
-        (cvWithCategorizedScores?.course_score || 0);
+      const teachingScore = filteredPointsData ? 
+        (filteredPointsData.teaching_score || 0) : 
+        (cvWithCategorizedScores?.teaching_score || 0);
       
       // Calculate total points: if filtered data exists, use it; otherwise sum all categories
-      // This ensures course scores are always included
+      // This ensures teaching scores are always included
       const totalPoints = filteredPointsData ? 
         filteredPointsData.total_points : 
-        (intellectualScore + professionalScore + courseScore);
+        (intellectualScore + professionalScore + teachingScore);
       
       allCVsWithPoints.push({
         cv,
         intellectualScore,
         professionalScore,
-        courseScore,
+        teachingScore,
         totalPoints
       });
     });
@@ -511,13 +510,13 @@ const AdminView = () => {
     // Calculate rankings with proper tie handling
     const intellectualRankings = assignRanks(allCVsWithPoints, 'intellectualScore');
     const professionalRankings = assignRanks(allCVsWithPoints, 'professionalScore');
-    const courseRankings = assignRanks(allCVsWithPoints, 'courseScore');
+    const teachingRankings = assignRanks(allCVsWithPoints, 'teachingScore');
     const overallRankings = assignRanks(allCVsWithPoints, 'totalPoints');
     
     setRankings({
       intellectual: intellectualRankings,
       professional: professionalRankings,
-      course: courseRankings,
+      teaching: teachingRankings,
       overall: overallRankings
     });
   }, [cvs, cvsWithItemPoints, cvsWithCategorizedScores, filteredPoints]);
@@ -810,7 +809,7 @@ const AdminView = () => {
                         📚 Teaching Score Rankings
                       </h4>
                       <div className="space-y-1 max-h-60 overflow-y-auto">
-                        {rankings.course.slice(0, 10).map((item, index) => (
+                        {rankings.teaching.slice(0, 10).map((item, index) => (
                           <div key={item.cv.id} className="flex items-center justify-between text-sm">
                             <div className="flex items-center gap-2">
                               <span className={`font-bold ${
@@ -825,11 +824,11 @@ const AdminView = () => {
                               </span>
                             </div>
                             <span className="font-semibold text-purple-700">
-                              {item.courseScore} pts
+                              {item.teachingScore} pts
                             </span>
                           </div>
                         ))}
-                        {rankings.course.length === 0 && (
+                        {rankings.teaching.length === 0 && (
                           <p className="text-gray-500 text-sm">No data available</p>
                         )}
                       </div>
@@ -908,7 +907,7 @@ const AdminView = () => {
                      // Find current rankings for this CV
                      const intellectualRank = rankings.intellectual.find(r => r.cv.id === cv.id)
                      const professionalRank = rankings.professional.find(r => r.cv.id === cv.id)
-                     const courseRank = rankings.course.find(r => r.cv.id === cv.id)
+                     const teachingRank = rankings.teaching.find(r => r.cv.id === cv.id)
                      const overallRank = rankings.overall.find(r => r.cv.id === cv.id)
                      
                      // Use filtered CV for display
@@ -928,7 +927,7 @@ const AdminView = () => {
                                      {filteredPointsData ? filteredPointsData.total_points : (
                                        (cvWithCategorizedScores?.intellectual_score || 0) + 
                                        (cvWithCategorizedScores?.professional_score || 0) + 
-                                       (cvWithCategorizedScores?.course_score || 0)
+                                       (cvWithCategorizedScores?.teaching_score || 0)
                                      )} pts
                                    </span>
                                    {/* Overall Rank */}
@@ -985,17 +984,17 @@ const AdminView = () => {
                                    <div className="flex items-center gap-1">
                                      <span className="text-purple-600 font-medium">Teaching:</span>
                                      <span className="font-semibold text-purple-700">
-                                       {filteredPointsData ? (filteredPointsData.course_score || 0) : (cvWithCategorizedScores?.course_score || 0)} pts
+                                       {filteredPointsData ? (filteredPointsData.teaching_score || 0) : (cvWithCategorizedScores?.teaching_score || 0)} pts
                                      </span>
                                      {/* Teaching Rank */}
-                                     {courseRank && (
+                                     {teachingRank && (
                                        <span className={`text-xs font-bold px-1 py-0.5 rounded ${
-                                         courseRank.rank === 1 ? 'bg-yellow-100 text-yellow-700' :
-                                         courseRank.rank === 2 ? 'bg-gray-100 text-gray-700' :
-                                         courseRank.rank === 3 ? 'bg-orange-100 text-orange-700' :
+                                         teachingRank.rank === 1 ? 'bg-yellow-100 text-yellow-700' :
+                                         teachingRank.rank === 2 ? 'bg-gray-100 text-gray-700' :
+                                         teachingRank.rank === 3 ? 'bg-orange-100 text-orange-700' :
                                          'bg-purple-100 text-purple-700'
                                        }`}>
-                                         #{courseRank.rank}
+                                         #{teachingRank.rank}
                                        </span>
                                      )}
                                    </div>
@@ -1351,6 +1350,7 @@ const CVPrintView = ({ cv, yearFilter = { from: '', to: '' } }) => {
                 <div>
                   <p className="font-semibold">{course.course}</p>
                   <p className="text-gray-600">{course.institution}</p>
+                  {course.credit_hours && <p className="text-gray-500 text-sm mt-1">Credit Hours: {course.credit_hours}</p>}
                   {course.description && <p className="text-gray-500 text-sm mt-1">{course.description}</p>}
                 </div>
                 <p className="text-gray-600">{course.year}</p>
@@ -1360,24 +1360,6 @@ const CVPrintView = ({ cv, yearFilter = { from: '', to: '' } }) => {
         </div>
       )}
 
-      {/* Courses (Credit Hours) */}
-      {filteredCV.courses && filteredCV.courses.length > 0 && (
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 border-b border-gray-300 pb-2 mb-4">Courses (Credit Hours)</h2>
-          {filteredCV.courses.map((course, index) => (
-            <div key={index} className="mb-4">
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className="font-semibold">{course.course}</p>
-                  <p className="text-gray-600">{course.institution}</p>
-                  {course.credit_hours && <p className="text-gray-500 text-sm mt-1">Credit Hours: {course.credit_hours}</p>}
-                </div>
-                <p className="text-gray-600">{course.year}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* Research Publications */}
       {filteredCV.publications_research && filteredCV.publications_research.length > 0 && (

@@ -49,7 +49,6 @@ export const cvTable = {
     education: 'json',
     academic_employment: 'json',
     teaching: 'json',
-    courses: 'json',
     publications_research: 'json',
     publications_books: 'json',
     conference_presentations: 'json',

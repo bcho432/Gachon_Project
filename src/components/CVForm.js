@@ -17,8 +17,7 @@ const CVForm = () => {
     address: '',
     education: [{ degree: '', institution: '', year: '', field: '' }],
     academic_employment: [{ position: '', institution: '', start_date: '', end_date: '', current: false }],
-    teaching: [{ course: '', institution: '', year: '', description: '' }],
-    courses: [{ course: '', institution: '', year: '', credit_hours: '' }],
+    teaching: [{ course: '', institution: '', year: '', description: '', credit_hours: '' }],
     publications_research: [{ title: '', journal: '', year: '', authors: '', doi: '', index: '' }],
     publications_books: [{ title: '', publisher: '', year: '', authors: '', isbn: '' }],
     conference_presentations: [{ title: '', conference: '', year: '', location: '', type: '' }],
@@ -40,8 +39,8 @@ const CVForm = () => {
       if (error && error.code !== 'PGRST116') {
         console.error('Error loading CV:', error)
         // Check if it's a 406 error (column doesn't exist)
-        if (error.status === 406 || error.message?.includes('courses') || error.message?.includes('column')) {
-          toast.error('Database migration required! Please run migrations/add_courses_column.sql in Supabase SQL Editor.', { duration: 8000 })
+        if (error.status === 406 || error.message?.includes('column')) {
+          toast.error('Database migration required! Please check your database schema.', { duration: 8000 })
         } else {
           toast.error('Error loading CV')
         }
@@ -56,8 +55,7 @@ const CVForm = () => {
           address: data.address || '',
           education: data.education || [{ degree: '', institution: '', year: '', field: '' }],
           academic_employment: data.academic_employment || [{ position: '', institution: '', start_date: '', end_date: '', current: false }],
-          teaching: data.teaching || [{ course: '', institution: '', year: '', description: '' }],
-          courses: data.courses || [{ course: '', institution: '', year: '', credit_hours: '' }],
+          teaching: data.teaching || [{ course: '', institution: '', year: '', description: '', credit_hours: '' }],
           publications_research: data.publications_research || [{ title: '', journal: '', year: '', authors: '', doi: '', index: '' }],
           publications_books: data.publications_books || [{ title: '', publisher: '', year: '', authors: '', isbn: '' }],
           conference_presentations: data.conference_presentations || [{ title: '', conference: '', year: '', location: '', type: '' }],
@@ -93,8 +91,6 @@ const CVForm = () => {
       // Only record the NEW snapshot after saving (no pre-update snapshot)
 
       // Update or insert the current CV
-      // Note: If you get a 406 error, you need to run the migration to add the 'courses' column
-      // See: migrations/add_courses_column.sql
       const { data, error } = await supabase
         .from('cvs')
         .upsert({
@@ -108,8 +104,8 @@ const CVForm = () => {
 
       if (error) {
         console.error('Error saving CV:', error)
-        if (error.code === 'PGRST116' || error.message?.includes('courses') || error.message?.includes('column')) {
-          toast.error('Database migration required. Please run migrations/add_courses_column.sql in Supabase SQL Editor.')
+        if (error.code === 'PGRST116' || error.message?.includes('column')) {
+          toast.error('Database migration required. Please check your database schema.')
         } else {
           toast.error('Error saving CV: ' + (error.message || 'Unknown error'))
         }
@@ -142,8 +138,8 @@ const CVForm = () => {
           if (newErr) {
             console.error('Error inserting new history snapshot:', newErr)
             // Check if it's a column missing error
-            if (newErr.status === 400 || newErr.status === 406 || newErr.message?.includes('courses') || newErr.message?.includes('column')) {
-              toast.error('Database migration required for cv_history table. Please run migrations/add_courses_column.sql in Supabase SQL Editor.', { duration: 8000 })
+            if (newErr.status === 400 || newErr.status === 406 || newErr.message?.includes('column')) {
+              toast.error('Database migration required for cv_history table. Please check your database schema.', { duration: 8000 })
             } else {
               toast.error('Failed to write history snapshot')
             }
@@ -173,8 +169,7 @@ const CVForm = () => {
     const defaultItems = {
       education: { degree: '', institution: '', year: '', field: '' },
       academic_employment: { position: '', institution: '', start_date: '', end_date: '', current: false },
-      teaching: { course: '', institution: '', year: '', description: '' },
-      courses: { course: '', institution: '', year: '', credit_hours: '' },
+      teaching: { course: '', institution: '', year: '', description: '', credit_hours: '' },
       publications_research: { title: '', journal: '', year: '', authors: '', doi: '', index: '' },
       publications_books: { title: '', publisher: '', year: '', authors: '', isbn: '' },
       conference_presentations: { title: '', conference: '', year: '', location: '', type: '' },
@@ -435,6 +430,15 @@ const CVForm = () => {
                       onChange={(e) => updateArrayField('teaching', index, 'year', e.target.value)}
                       className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                     />
+                    <input
+                      type="number"
+                      placeholder="Credit Hours (1 hour = 1 credit)"
+                      value={course.credit_hours || ''}
+                      onChange={(e) => updateArrayField('teaching', index, 'credit_hours', e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      min="0"
+                      step="0.5"
+                    />
                   </div>
                   <textarea
                     placeholder="Course Description"
@@ -443,71 +447,11 @@ const CVForm = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                     rows="3"
                   />
-                </div>
-              ))}
-            </div>
-
-            {/* Courses (with Credit Hours) */}
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <h2 className="text-xl font-semibold text-gray-900 flex items-center">
-                  <BookOpen className="h-5 w-5 mr-2" />
-                  Courses (Credit Hours)
-                </h2>
-                <button
-                  onClick={() => addArrayItem('courses')}
-                  className="flex items-center px-3 py-1 text-sm bg-green-600 text-white rounded-md hover:bg-green-700"
-                >
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add Course
-                </button>
-              </div>
-              {formData.courses.map((course, index) => (
-                <div key={index} className="border border-gray-200 rounded-md p-4 space-y-3">
-                  <div className="flex justify-between items-center">
-                    <h3 className="font-medium">Course #{index + 1}</h3>
-                    <button
-                      onClick={() => removeArrayItem('courses', index)}
-                      className="text-red-600 hover:text-red-800"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <input
-                      type="text"
-                      placeholder="Course Name"
-                      value={course.course}
-                      onChange={(e) => updateArrayField('courses', index, 'course', e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Institution"
-                      value={course.institution}
-                      onChange={(e) => updateArrayField('courses', index, 'institution', e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Year"
-                      value={course.year}
-                      onChange={(e) => updateArrayField('courses', index, 'year', e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    />
-                    <input
-                      type="number"
-                      placeholder="Credit Hours (1 hour = 1 credit)"
-                      value={course.credit_hours}
-                      onChange={(e) => updateArrayField('courses', index, 'credit_hours', e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                      min="0"
-                      step="0.5"
-                    />
-                  </div>
-                  <p className="text-xs text-gray-500">
-                    Each credit hour equals 1 point in the Teaching Score category.
-                  </p>
+                  {course.credit_hours && (
+                    <p className="text-xs text-gray-500">
+                      Credit hours contribute to Teaching Score (1 hour = 1 point).
+                    </p>
+                  )}
                 </div>
               ))}
             </div>
