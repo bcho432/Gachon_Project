@@ -41,6 +41,11 @@ const AdminView = () => {
   const [pageSize] = useState(20) // Show 20 CVs per page
   const printRef = useRef()
   const historyPrintRef = useRef()
+  
+  // Score breakdown modal state
+  const [showBreakdownModal, setShowBreakdownModal] = useState(false)
+  const [breakdownData, setBreakdownData] = useState(null)
+  const [breakdownLoading, setBreakdownLoading] = useState(false)
 
   // Ranking system state
   const [rankings, setRankings] = useState({
@@ -308,6 +313,151 @@ const AdminView = () => {
     setShowChangesModal(false)
     setSelectedCVForChanges(null)
     setContentChangeEntries([])
+  }
+
+  // Open score breakdown modal
+  const openBreakdownModal = async (cv, scoreType) => {
+    setBreakdownLoading(true)
+    setShowBreakdownModal(true)
+    
+    try {
+      // Get item points for this CV
+      const itemPoints = await getCVItemsWithPoints(cv.id)
+      
+      // Get filtered CV if year filter is active
+      const filteredCV = filterCVByYear(cv, yearFilter)
+      
+      // Filter item points based on year filter
+      let filteredItemPoints = itemPoints
+      if (yearFilter.from || yearFilter.to) {
+        const fromYear = yearFilter.from ? parseInt(yearFilter.from) : 0
+        const toYear = yearFilter.to ? parseInt(yearFilter.to) : 9999
+        
+        const isDateRangeInFilter = (startDate, endDate) => {
+          if (!startDate) return false
+          const startYear = parseInt(startDate.toString().match(/\d{4}/)?.[0])
+          if (isNaN(startYear)) return false
+          if (!endDate || endDate === 'Present') {
+            return startYear >= fromYear && startYear <= toYear
+          }
+          const endYear = parseInt(endDate.toString().match(/\d{4}/)?.[0])
+          if (isNaN(endYear)) return false
+          return startYear <= toYear && endYear >= fromYear
+        }
+        
+        filteredItemPoints = itemPoints.filter(point => {
+          const cvSection = cv[point.section_name]
+          if (!cvSection || !Array.isArray(cvSection)) return false
+          const item = cvSection[point.item_index]
+          if (!item) return false
+          
+          // Education is always included
+          if (point.section_name === 'education') return true
+          
+          // Check date range
+          switch (point.section_name) {
+            case 'academic_employment':
+              return isDateRangeInFilter(item.start_date, item.end_date)
+            default:
+              return isDateRangeInFilter(item.year, null)
+          }
+        })
+      }
+      
+      let breakdownItems = []
+      let totalScore = 0
+      
+      if (scoreType === 'intellectual') {
+        // Intellectual: publications_research, publications_books, education, conference_presentations
+        const intellectualSections = ['publications_research', 'publications_books', 'education', 'conference_presentations']
+        breakdownItems = filteredItemPoints
+          .filter(point => intellectualSections.includes(point.section_name))
+          .map(point => {
+            const cvSection = filteredCV[point.section_name]
+            const item = cvSection && Array.isArray(cvSection) ? cvSection[point.item_index] : null
+            return {
+              section: point.section_name,
+              itemIndex: point.item_index,
+              points: point.points || 0,
+              itemData: item,
+              displayText: item ? getItemDisplayText(point.section_name, item) : 'Unknown item'
+            }
+          })
+        totalScore = breakdownItems.reduce((sum, item) => sum + item.points, 0)
+      } else if (scoreType === 'professional') {
+        // Professional: professional_service, internal_activities
+        const professionalSections = ['professional_service', 'internal_activities']
+        breakdownItems = filteredItemPoints
+          .filter(point => professionalSections.includes(point.section_name))
+          .map(point => {
+            const cvSection = filteredCV[point.section_name]
+            const item = cvSection && Array.isArray(cvSection) ? cvSection[point.item_index] : null
+            return {
+              section: point.section_name,
+              itemIndex: point.item_index,
+              points: point.points || 0,
+              itemData: item,
+              displayText: item ? getItemDisplayText(point.section_name, item) : 'Unknown item'
+            }
+          })
+        totalScore = breakdownItems.reduce((sum, item) => sum + item.points, 0)
+      } else if (scoreType === 'teaching') {
+        // Teaching: credit hours from teaching array + bonus points from item_points
+        const teachingBonusPoints = filteredItemPoints
+          .filter(point => point.section_name === 'teaching')
+          .map(point => {
+            const cvSection = filteredCV[point.section_name]
+            const item = cvSection && Array.isArray(cvSection) ? cvSection[point.item_index] : null
+            return {
+              section: point.section_name,
+              itemIndex: point.item_index,
+              points: point.points || 0,
+              itemData: item,
+              displayText: item ? getItemDisplayText(point.section_name, item) : 'Unknown item',
+              type: 'bonus'
+            }
+          })
+        
+        // Credit hours from teaching array
+        const creditHoursItems = []
+        if (filteredCV.teaching && Array.isArray(filteredCV.teaching)) {
+          filteredCV.teaching.forEach((course, index) => {
+            const creditHours = parseFloat(course.credit_hours) || 0
+            if (creditHours > 0) {
+              creditHoursItems.push({
+                section: 'teaching',
+                itemIndex: index,
+                points: creditHours,
+                itemData: course,
+                displayText: getItemDisplayText('teaching', course),
+                type: 'credit_hours'
+              })
+            }
+          })
+        }
+        
+        breakdownItems = [...creditHoursItems, ...teachingBonusPoints]
+        totalScore = breakdownItems.reduce((sum, item) => sum + item.points, 0)
+      }
+      
+      setBreakdownData({
+        cv,
+        scoreType,
+        items: breakdownItems,
+        totalScore
+      })
+    } catch (error) {
+      console.error('Error loading breakdown:', error)
+      toast.error('Error loading score breakdown')
+      setBreakdownData(null)
+    } finally {
+      setBreakdownLoading(false)
+    }
+  }
+
+  const closeBreakdownModal = () => {
+    setShowBreakdownModal(false)
+    setBreakdownData(null)
   }
 
   const handleDeleteCV = async (cv) => {
@@ -948,10 +1098,20 @@ const AdminView = () => {
                                {(filteredPointsData || cvWithCategorizedScores) && (
                                  <div className="flex items-center gap-4 text-sm">
                                    <div className="flex items-center gap-1">
-                                     <span className="text-blue-600 font-medium">Intellectual:</span>
-                                     <span className="font-semibold text-blue-700">
+                                     <button
+                                       onClick={() => openBreakdownModal(cv, 'intellectual')}
+                                       className="text-blue-600 font-medium hover:text-blue-800 hover:underline cursor-pointer"
+                                       title="Click to see breakdown"
+                                     >
+                                       Intellectual:
+                                     </button>
+                                     <button
+                                       onClick={() => openBreakdownModal(cv, 'intellectual')}
+                                       className="font-semibold text-blue-700 hover:text-blue-800 hover:underline cursor-pointer"
+                                       title="Click to see breakdown"
+                                     >
                                        {filteredPointsData ? filteredPointsData.intellectual_score : (cvWithCategorizedScores?.intellectual_score || 0)} pts
-                                     </span>
+                                     </button>
                                      {/* Intellectual Rank */}
                                      {intellectualRank && (
                                        <span className={`text-xs font-bold px-1 py-0.5 rounded ${
@@ -965,10 +1125,20 @@ const AdminView = () => {
                                      )}
                                    </div>
                                    <div className="flex items-center gap-1">
-                                     <span className="text-green-600 font-medium">Professional:</span>
-                                     <span className="font-semibold text-green-700">
+                                     <button
+                                       onClick={() => openBreakdownModal(cv, 'professional')}
+                                       className="text-green-600 font-medium hover:text-green-800 hover:underline cursor-pointer"
+                                       title="Click to see breakdown"
+                                     >
+                                       Professional:
+                                     </button>
+                                     <button
+                                       onClick={() => openBreakdownModal(cv, 'professional')}
+                                       className="font-semibold text-green-700 hover:text-green-800 hover:underline cursor-pointer"
+                                       title="Click to see breakdown"
+                                     >
                                        {filteredPointsData ? filteredPointsData.professional_score : (cvWithCategorizedScores?.professional_score || 0)} pts
-                                     </span>
+                                     </button>
                                      {/* Professional Rank */}
                                      {professionalRank && (
                                        <span className={`text-xs font-bold px-1 py-0.5 rounded ${
@@ -982,10 +1152,20 @@ const AdminView = () => {
                                      )}
                                    </div>
                                    <div className="flex items-center gap-1">
-                                     <span className="text-purple-600 font-medium">Teaching:</span>
-                                     <span className="font-semibold text-purple-700">
+                                     <button
+                                       onClick={() => openBreakdownModal(cv, 'teaching')}
+                                       className="text-purple-600 font-medium hover:text-purple-800 hover:underline cursor-pointer"
+                                       title="Click to see breakdown"
+                                     >
+                                       Teaching:
+                                     </button>
+                                     <button
+                                       onClick={() => openBreakdownModal(cv, 'teaching')}
+                                       className="font-semibold text-purple-700 hover:text-purple-800 hover:underline cursor-pointer"
+                                       title="Click to see breakdown"
+                                     >
                                        {filteredPointsData ? (filteredPointsData.teaching_score || 0) : (cvWithCategorizedScores?.teaching_score || 0)} pts
-                                     </span>
+                                     </button>
                                      {/* Teaching Rank */}
                                      {teachingRank && (
                                        <span className={`text-xs font-bold px-1 py-0.5 rounded ${
@@ -1278,6 +1458,107 @@ const AdminView = () => {
       )}
 
       {/* Change Log removed per request */}
+
+      {/* Score Breakdown Modal */}
+      {showBreakdownModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg max-w-3xl w-full mx-4 max-h-[90vh] overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+              <h2 className="text-xl font-semibold">
+                {breakdownData?.cv?.full_name}'s {breakdownData?.scoreType === 'intellectual' ? 'Intellectual' : breakdownData?.scoreType === 'professional' ? 'Professional' : 'Teaching'} Score Breakdown
+              </h2>
+              <button
+                onClick={closeBreakdownModal}
+                className="px-3 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+              >
+                Close
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
+              {breakdownLoading ? (
+                <div className="text-center py-6 text-gray-600">Loading breakdown...</div>
+              ) : !breakdownData || !breakdownData.items || breakdownData.items.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  No items contributing to this score.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <span className="text-lg font-semibold text-gray-700">Total Score:</span>
+                      <span className={`text-2xl font-bold ${
+                        breakdownData.scoreType === 'intellectual' ? 'text-blue-700' :
+                        breakdownData.scoreType === 'professional' ? 'text-green-700' :
+                        'text-purple-700'
+                      }`}>
+                        {breakdownData.totalScore.toFixed(1)} pts
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <h3 className="font-semibold text-gray-800 text-sm uppercase tracking-wide">
+                      Contributing Items ({breakdownData.items.length})
+                    </h3>
+                    
+                    {breakdownData.items.map((item, index) => (
+                      <div key={index} className="border border-gray-200 rounded-lg p-4 bg-white hover:shadow-md transition-shadow">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className={`text-xs font-semibold px-2 py-1 rounded ${
+                                breakdownData.scoreType === 'intellectual' ? 'bg-blue-100 text-blue-800' :
+                                breakdownData.scoreType === 'professional' ? 'bg-green-100 text-green-800' :
+                                'bg-purple-100 text-purple-800'
+                              }`}>
+                                {getSectionDisplayName(item.section)}
+                              </span>
+                              {item.type && (
+                                <span className="text-xs font-medium px-2 py-1 rounded bg-gray-100 text-gray-700">
+                                  {item.type === 'credit_hours' ? 'Credit Hours' : 'Bonus Points'}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-sm text-gray-800 mb-1">
+                              {item.displayText}
+                            </div>
+                            {item.itemData && (
+                              <div className="text-xs text-gray-500 mt-1">
+                                {item.itemData.year && <span>Year: {item.itemData.year}</span>}
+                                {item.itemData.credit_hours && item.type === 'credit_hours' && (
+                                  <span className="ml-2">Credit Hours: {item.itemData.credit_hours}</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <div className="ml-4">
+                            <span className={`text-lg font-bold ${
+                              breakdownData.scoreType === 'intellectual' ? 'text-blue-700' :
+                              breakdownData.scoreType === 'professional' ? 'text-green-700' :
+                              'text-purple-700'
+                            }`}>
+                              +{item.points.toFixed(1)}
+                            </span>
+                            <span className="text-xs text-gray-500 block text-center">pts</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {breakdownData.scoreType === 'teaching' && (
+                    <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-xs text-blue-800">
+                        <strong>Note:</strong> Teaching score includes credit hours from courses (1 credit hour = 1 point) plus any bonus points assigned to teaching items.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
      </div>
    )
  }
