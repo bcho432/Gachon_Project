@@ -520,111 +520,42 @@ const AdminView = () => {
 
   // (Removed) refreshCVData helper was unused
 
-  // Calculate filtered points for all CVs
-  const calculateFilteredPointsForAllCVs = useCallback(async () => {
-    if (!yearFilter.from && !yearFilter.to) {
-      setFilteredPoints({});
-      setCalculatingFilteredPoints(false);
-      return;
-    }
-
-    setCalculatingFilteredPoints(true);
-    try {
-      const newFilteredPoints = {};
-      
-      for (const cv of cvs) {
-        // Get item points for this CV
-        const itemPoints = await getCVItemsWithPoints(cv.id);
-        
-        // Calculate filtered points
-        const points = calculateFilteredPoints(cv, itemPoints, yearFilter);
-        newFilteredPoints[cv.id] = points;
-      }
-      
-      setFilteredPoints(newFilteredPoints);
-      
-      // Calculate rankings based on filtered points
-      calculateRankings(newFilteredPoints);
-    } catch (error) {
-      console.error('Error calculating filtered points:', error);
-    } finally {
-      setCalculatingFilteredPoints(false);
-    }
-  }, [cvs, yearFilter]);
-
-  // Helper function to extract CV summary information
-  const getCVSummary = (cv) => {
-    const summary = {
-      latestEducation: null,
-      currentEmployment: []
-    };
-
-    // Get latest education (highest year)
-    if (cv.education && Array.isArray(cv.education) && cv.education.length > 0) {
-      const validEducation = cv.education.filter(edu => 
-        edu.degree && edu.institution && edu.year
-      );
-      
-      if (validEducation.length > 0) {
-        // Sort by year descending and get the latest
-        const sortedEducation = validEducation.sort((a, b) => {
-          const yearA = parseInt(a.year) || 0;
-          const yearB = parseInt(b.year) || 0;
-          return yearB - yearA;
-        });
-        summary.latestEducation = sortedEducation[0];
-      }
-    }
-
-    // Get current employment (where current is true or end_date is empty/future)
-    if (cv.academic_employment && Array.isArray(cv.academic_employment) && cv.academic_employment.length > 0) {
-      const currentYear = new Date().getFullYear();
-      summary.currentEmployment = cv.academic_employment.filter(emp => {
-        if (emp.current === true) return true;
-        if (!emp.end_date || emp.end_date === '') return true;
-        const endYear = parseInt(emp.end_date) || 0;
-        return endYear >= currentYear;
-      }).filter(emp => emp.position && emp.institution); // Only include entries with position and institution
-    }
-
-    return summary;
-  };
-
-  // Calculate rankings for all CVs
+  // Global rankings: every CV in cvsWithCategorizedScores (full dataset), not the paginated list
   const calculateRankings = useCallback((pointsData = null) => {
-    const dataToUse = pointsData || filteredPoints;
+    const dataToUse = pointsData != null ? pointsData : filteredPoints;
     const allCVsWithPoints = [];
-    
-    // Combine CVs with their points data
-    cvs.forEach(cv => {
-      const cvWithPoints = cvsWithItemPoints.find(c => c.cv_id === cv.id);
-      const cvWithCategorizedScores = cvsWithCategorizedScores.find(c => c.cv_id === cv.id);
+
+    cvsWithCategorizedScores.forEach((row) => {
+      const cv = {
+        id: row.cv_id,
+        full_name: row.full_name,
+        email: row.email,
+        user_id: row.user_id,
+      };
       const filteredPointsData = dataToUse[cv.id];
-      
-      const intellectualScore = filteredPointsData ? 
-        filteredPointsData.intellectual_score : 
-        (cvWithCategorizedScores?.intellectual_score || 0);
-      
-      const professionalScore = filteredPointsData ? 
-        filteredPointsData.professional_score : 
-        (cvWithCategorizedScores?.professional_score || 0);
-      
-      const teachingScore = filteredPointsData ? 
-        (filteredPointsData.teaching_score || 0) : 
-        (cvWithCategorizedScores?.teaching_score || 0);
-      
-      // Calculate total points: if filtered data exists, use it; otherwise sum all categories
-      // This ensures teaching scores are always included
-      const totalPoints = filteredPointsData ? 
-        filteredPointsData.total_points : 
-        (intellectualScore + professionalScore + teachingScore);
-      
+
+      const intellectualScore = filteredPointsData
+        ? filteredPointsData.intellectual_score
+        : (row.intellectual_score || 0);
+
+      const professionalScore = filteredPointsData
+        ? filteredPointsData.professional_score
+        : (row.professional_score || 0);
+
+      const teachingScore = filteredPointsData
+        ? (filteredPointsData.teaching_score || 0)
+        : (row.teaching_score || 0);
+
+      const totalPoints = filteredPointsData
+        ? filteredPointsData.total_points
+        : (intellectualScore + professionalScore + teachingScore);
+
       allCVsWithPoints.push({
         cv,
         intellectualScore,
         professionalScore,
         teachingScore,
-        totalPoints
+        totalPoints,
       });
     });
     
@@ -669,14 +600,82 @@ const AdminView = () => {
       teaching: teachingRankings,
       overall: overallRankings
     });
-  }, [cvs, cvsWithItemPoints, cvsWithCategorizedScores, filteredPoints]);
+  }, [cvsWithCategorizedScores, filteredPoints]);
 
-  // Calculate rankings when CVs or points data changes
+  // Filtered points for every CV when a year range is set (rankings use this via filteredPoints state)
+  const calculateFilteredPointsForAllCVs = useCallback(async () => {
+    if (!yearFilter.from && !yearFilter.to) {
+      setFilteredPoints({});
+      setCalculatingFilteredPoints(false);
+      return;
+    }
+
+    setCalculatingFilteredPoints(true);
+    try {
+      const { data: allCvs, error } = await supabase
+        .from('cvs')
+        .select('*')
+        .order('updated_at', { ascending: false });
+
+      if (error) throw error;
+
+      const newFilteredPoints = {};
+
+      for (const cv of allCvs || []) {
+        const itemPoints = await getCVItemsWithPoints(cv.id);
+        const points = calculateFilteredPoints(cv, itemPoints, yearFilter);
+        newFilteredPoints[cv.id] = points;
+      }
+
+      setFilteredPoints(newFilteredPoints);
+    } catch (error) {
+      console.error('Error calculating filtered points:', error);
+    } finally {
+      setCalculatingFilteredPoints(false);
+    }
+  }, [yearFilter]);
+
+  // Helper function to extract CV summary information
+  const getCVSummary = (cv) => {
+    const summary = {
+      latestEducation: null,
+      currentEmployment: []
+    };
+
+    if (cv.education && Array.isArray(cv.education) && cv.education.length > 0) {
+      const validEducation = cv.education.filter(edu =>
+        edu.degree && edu.institution && edu.year
+      );
+
+      if (validEducation.length > 0) {
+        const sortedEducation = validEducation.sort((a, b) => {
+          const yearA = parseInt(a.year) || 0;
+          const yearB = parseInt(b.year) || 0;
+          return yearB - yearA;
+        });
+        summary.latestEducation = sortedEducation[0];
+      }
+    }
+
+    if (cv.academic_employment && Array.isArray(cv.academic_employment) && cv.academic_employment.length > 0) {
+      const currentYear = new Date().getFullYear();
+      summary.currentEmployment = cv.academic_employment.filter(emp => {
+        if (emp.current === true) return true;
+        if (!emp.end_date || emp.end_date === '') return true;
+        const endYear = parseInt(emp.end_date) || 0;
+        return endYear >= currentYear;
+      }).filter(emp => emp.position && emp.institution);
+    }
+
+    return summary;
+  };
+
+  // Recalculate global rankings when categorized scores or filtered year totals change
   useEffect(() => {
-    if (cvs.length > 0 && (cvsWithItemPoints.length > 0 || cvsWithCategorizedScores.length > 0)) {
+    if (cvsWithCategorizedScores.length > 0) {
       calculateRankings();
     }
-  }, [cvs, cvsWithItemPoints, cvsWithCategorizedScores, calculateRankings]);
+  }, [cvsWithCategorizedScores, filteredPoints, calculateRankings]);
 
   // Recalculate filtered points when year filter changes
   useEffect(() => {
@@ -1019,8 +1018,8 @@ const AdminView = () => {
                 
                 {showRankings && (
                   <div className="mt-3 text-xs text-gray-500">
-                    💡 Rankings update automatically based on current year filter and point calculations. 
-                    Top 10 rankings shown. Gold (#1), Silver (#2), Bronze (#3) medals indicated.
+                    💡 Rankings include all CVs in the system (not just this page) and update with the year filter and point data.
+                    Top 10 shown. Gold (#1), Silver (#2), Bronze (#3) medals indicated.
                   </div>
                 )}
               </div>
