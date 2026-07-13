@@ -1,14 +1,20 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../supabase'
-import { Save, Plus, Trash2, GraduationCap, Briefcase, BookOpen, Users, Award, User, Building } from 'lucide-react'
+import { Save, Plus, Trash2, GraduationCap, Briefcase, BookOpen, Users, Award, User, Building, ArrowLeft } from 'lucide-react'
 import { setPublicationIndexPoints } from '../utils/itemPointsManager'
 import toast from 'react-hot-toast'
 
 const CVForm = () => {
   const { user } = useAuth()
+  const { userId: targetUserId } = useParams()
+  const navigate = useNavigate()
+  const isAdminEdit = Boolean(targetUserId)
+  const cvOwnerId = targetUserId || user?.id
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [ownerEmail, setOwnerEmail] = useState('')
   
   const [formData, setFormData] = useState({
     full_name: '',
@@ -26,14 +32,14 @@ const CVForm = () => {
   })
 
   const loadCV = useCallback(async () => {
-    if (!user) return
+    if (!user || !cvOwnerId) return
     
     setLoading(true)
     try {
       const { data, error } = await supabase
         .from('cvs')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', cvOwnerId)
         .single()
 
       if (error && error.code !== 'PGRST116') {
@@ -48,6 +54,7 @@ const CVForm = () => {
       }
 
       if (data) {
+        setOwnerEmail(data.email || '')
         setFormData({
           full_name: data.full_name || '',
           phone: data.phone || '',
@@ -66,20 +73,22 @@ const CVForm = () => {
           professional_service: data.professional_service || [{ role: '', organization: '', year: '', description: '' }],
           internal_activities: data.internal_activities || [{ year: '', position_type: '', details: '', current: false }]
         })
+      } else if (isAdminEdit) {
+        toast.error('No CV found for this user')
       }
     } catch (error) {
       toast.error('Error loading CV')
     } finally {
       setLoading(false)
     }
-  }, [user])
+  }, [user, cvOwnerId, isAdminEdit])
 
   useEffect(() => {
     loadCV()
   }, [loadCV])
 
   const handleSave = async () => {
-    if (!user) return
+    if (!user || !cvOwnerId) return
     
     setSaving(true)
     try {
@@ -87,10 +96,11 @@ const CVForm = () => {
       const { data: existingCVFull } = await supabase
         .from('cvs')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', cvOwnerId)
         .single()
 
       let cvId = existingCVFull?.id
+      const emailToSave = formData.email || ownerEmail || (isAdminEdit ? existingCVFull?.email : user.email) || ''
 
       // Only record the NEW snapshot after saving (no pre-update snapshot)
 
@@ -99,9 +109,9 @@ const CVForm = () => {
         .from('cvs')
         .upsert({
           id: cvId, // Use existing ID if available
-          user_id: user.id,
-          email: user.email, // Use current user's email
+          user_id: cvOwnerId,
           ...formData,
+          email: emailToSave,
           updated_at: new Date().toISOString()
         })
         .select()
@@ -133,9 +143,9 @@ const CVForm = () => {
             .from('cv_history')
             .insert({
               cv_id: data[0].id,
-              user_id: user.id,
-              email: user.email,
+              user_id: cvOwnerId,
               ...formData,
+              email: emailToSave,
               version_number: versionNew
             })
 
@@ -151,7 +161,7 @@ const CVForm = () => {
             toast.success(`History saved (v${versionNew})`)
           }
         }
-        toast.success('CV saved successfully!')
+        toast.success(isAdminEdit ? 'CV updated successfully!' : 'CV saved successfully!')
       }
     } catch (error) {
       toast.error('Error saving CV')
@@ -205,9 +215,27 @@ const CVForm = () => {
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        {isAdminEdit && (
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={() => navigate('/admin')}
+              className="flex items-center px-3 py-2 text-sm bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
+            >
+              <ArrowLeft className="h-4 w-4 mr-1" />
+              Back to Admin
+            </button>
+            <div className="flex-1 rounded-md bg-amber-50 border border-amber-200 px-4 py-2 text-sm text-amber-800">
+              Editing CV for <strong>{formData.full_name || ownerEmail || 'this user'}</strong>
+              {ownerEmail ? ` (${ownerEmail})` : ''}
+            </div>
+          </div>
+        )}
         <div className="bg-white shadow-lg rounded-lg">
           <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-gray-900">CV Manager</h1>
+            <h1 className="text-2xl font-bold text-gray-900">
+              {isAdminEdit ? 'Edit CV' : 'CV Manager'}
+            </h1>
             <button
               onClick={handleSave}
               disabled={saving}
@@ -533,11 +561,11 @@ const CVForm = () => {
                            const { data: existingCV } = await supabase
                              .from('cvs')
                              .select('id')
-                             .eq('user_id', user.id)
+                             .eq('user_id', cvOwnerId)
                              .maybeSingle()
                            if (existingCV?.id) {
                              await setPublicationIndexPoints({
-                               userId: user.id,
+                               userId: cvOwnerId,
                                cvId: existingCV.id,
                                itemIndex: index,
                                indexName: newIndex || 'Other'

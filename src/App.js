@@ -107,6 +107,14 @@ const AppContent = () => {
               </ProtectedRoute>
             } 
           />
+          <Route 
+            path="/admin/edit/:userId" 
+            element={
+              <ProtectedRoute adminOnly={true}>
+                <CVForm />
+              </ProtectedRoute>
+            } 
+          />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
