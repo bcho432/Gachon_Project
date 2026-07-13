@@ -18,7 +18,7 @@ const CVForm = () => {
     education: [{ degree: '', institution: '', year: '', field: '' }],
     academic_employment: [{ position: '', institution: '', start_date: '', end_date: '', current: false }],
     teaching: [{ course: '', institution: '', year: '', description: '', credit_hours: '' }],
-    publications_research: [{ title: '', journal: '', year: '', authors: '', doi: '', index: '' }],
+    publications_research: [{ title: '', journal: '', year: '', authors: '', doi: '', index: '', related_to_core_values: false, non_gachon_affiliation: false }],
     publications_books: [{ title: '', publisher: '', year: '', authors: '', isbn: '' }],
     conference_presentations: [{ title: '', conference: '', year: '', location: '', type: '' }],
     professional_service: [{ role: '', organization: '', year: '', description: '' }],
@@ -56,7 +56,11 @@ const CVForm = () => {
           education: data.education || [{ degree: '', institution: '', year: '', field: '' }],
           academic_employment: data.academic_employment || [{ position: '', institution: '', start_date: '', end_date: '', current: false }],
           teaching: data.teaching || [{ course: '', institution: '', year: '', description: '', credit_hours: '' }],
-          publications_research: data.publications_research || [{ title: '', journal: '', year: '', authors: '', doi: '', index: '' }],
+          publications_research: (data.publications_research || [{ title: '', journal: '', year: '', authors: '', doi: '', index: '', related_to_core_values: false, non_gachon_affiliation: false }]).map(pub => ({
+            related_to_core_values: false,
+            non_gachon_affiliation: false,
+            ...pub
+          })),
           publications_books: data.publications_books || [{ title: '', publisher: '', year: '', authors: '', isbn: '' }],
           conference_presentations: data.conference_presentations || [{ title: '', conference: '', year: '', location: '', type: '' }],
           professional_service: data.professional_service || [{ role: '', organization: '', year: '', description: '' }],
@@ -170,7 +174,7 @@ const CVForm = () => {
       education: { degree: '', institution: '', year: '', field: '' },
       academic_employment: { position: '', institution: '', start_date: '', end_date: '', current: false },
       teaching: { course: '', institution: '', year: '', description: '', credit_hours: '' },
-      publications_research: { title: '', journal: '', year: '', authors: '', doi: '', index: '' },
+      publications_research: { title: '', journal: '', year: '', authors: '', doi: '', index: '', related_to_core_values: false, non_gachon_affiliation: false },
       publications_books: { title: '', publisher: '', year: '', authors: '', isbn: '' },
       conference_presentations: { title: '', conference: '', year: '', location: '', type: '' },
       professional_service: { role: '', organization: '', year: '', description: '' },
@@ -551,6 +555,26 @@ const CVForm = () => {
                       <option value="KCI">KCI</option>
                       <option value="Other">Other</option>
                     </select>
+                  </div>
+                  <div className="flex flex-wrap gap-4 pt-1">
+                    <label className="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={!!pub.related_to_core_values}
+                        onChange={(e) => updateArrayField('publications_research', index, 'related_to_core_values', e.target.checked)}
+                        className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                      />
+                      Related to Core Values
+                    </label>
+                    <label className="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={!!pub.non_gachon_affiliation}
+                        onChange={(e) => updateArrayField('publications_research', index, 'non_gachon_affiliation', e.target.checked)}
+                        className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                      />
+                      non-Gachon Affiliation
+                    </label>
                   </div>
                 </div>
               ))}

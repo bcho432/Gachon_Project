@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../supabase'
-import { Printer, Eye, Search, User, History, Clock, Trash2, Award, Calendar, Trophy } from 'lucide-react'
+import { Printer, Eye, Search, User, History, Clock, Trash2, Award, Calendar, Trophy, BookOpen } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useReactToPrint } from 'react-to-print'
 import PerformanceMonitor from './PerformanceMonitor'
@@ -30,6 +30,10 @@ const AdminView = () => {
   const [showHistoryModal, setShowHistoryModal] = useState(false)
   const [cvHistory, setCvHistory] = useState([])
   const [selectedCVForHistory, setSelectedCVForHistory] = useState(null)
+  const [showResearchModal, setShowResearchModal] = useState(false)
+  const [coreValuesResearch, setCoreValuesResearch] = useState([])
+  const [researchLoading, setResearchLoading] = useState(false)
+  const [researchYearFilter, setResearchYearFilter] = useState({ from: '', to: '' })
   // Change Log state removed per request
   const [showChangesModal, setShowChangesModal] = useState(false)
   const [selectedCVForChanges, setSelectedCVForChanges] = useState(null)
@@ -183,6 +187,69 @@ const AdminView = () => {
     setSelectedCVForHistory(null)
     setCvHistory([])
   }
+
+  const openResearchModal = async () => {
+    setShowResearchModal(true)
+    setResearchLoading(true)
+    setResearchYearFilter({ from: '', to: '' })
+    try {
+      const { data, error } = await supabase
+        .from('cvs')
+        .select('id, full_name, email, publications_research')
+        .order('full_name', { ascending: true })
+
+      if (error) {
+        toast.error('Error loading research publications')
+        setCoreValuesResearch([])
+        return
+      }
+
+      const grouped = (data || [])
+        .map((cv) => {
+          const pubs = (cv.publications_research || []).filter(
+            (pub) => !!pub.related_to_core_values
+          )
+          return {
+            id: cv.id,
+            full_name: cv.full_name || 'Unnamed',
+            email: cv.email,
+            publications: pubs
+          }
+        })
+        .filter((person) => person.publications.length > 0)
+
+      setCoreValuesResearch(grouped)
+    } catch (error) {
+      console.error('Error loading core values research:', error)
+      toast.error('Error loading research publications')
+      setCoreValuesResearch([])
+    } finally {
+      setResearchLoading(false)
+    }
+  }
+
+  const closeResearchModal = () => {
+    setShowResearchModal(false)
+    setCoreValuesResearch([])
+    setResearchYearFilter({ from: '', to: '' })
+  }
+
+  const filteredCoreValuesResearch = coreValuesResearch
+    .map((person) => {
+      const fromYear = researchYearFilter.from ? parseInt(researchYearFilter.from) : null
+      const toYear = researchYearFilter.to ? parseInt(researchYearFilter.to) : null
+      const publications = person.publications.filter((pub) => {
+        if (fromYear == null && toYear == null) return true
+        const year = parseInt(pub.year)
+        // Hide publications with no year when a filter is applied
+        if (Number.isNaN(year) || pub.year === '' || pub.year == null) return false
+        if (fromYear != null && year < fromYear) return false
+        if (toYear != null && year > toYear) return false
+        return true
+      })
+      return { ...person, publications }
+    })
+    .filter((person) => person.publications.length > 0)
 
   // Build a content change log from successive cv_history snapshots
   const buildContentChangeLog = (cvHistoryEntries = []) => {
@@ -872,6 +939,28 @@ const AdminView = () => {
               </div>
             </div>
 
+            {/* Core Values Research */}
+            <div className="mb-6">
+              <div className="bg-white p-4 rounded-lg border border-gray-200 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <BookOpen className="h-5 w-5 text-teal-600" />
+                  <div>
+                    <h3 className="font-medium text-gray-800">Core Values Research</h3>
+                    <p className="text-xs text-gray-500">
+                      Publications marked Related to Core Values
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={openResearchModal}
+                  className="flex items-center px-3 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700"
+                >
+                  <BookOpen className="h-4 w-4 mr-1" />
+                  View Core Value Research
+                </button>
+              </div>
+            </div>
+
             {/* Rankings Display */}
             <div className="mb-6">
               <div className="bg-white p-4 rounded-lg border border-gray-200">
@@ -1341,6 +1430,106 @@ const AdminView = () => {
         </div>
       </div>
 
+      {/* Core Values Research Modal */}
+      {showResearchModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+              <div>
+                <h2 className="text-xl font-semibold">Core Values Research</h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  All publications marked Related to Core Values, grouped by person
+                </p>
+              </div>
+              <button
+                onClick={closeResearchModal}
+                className="px-3 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+              >
+                Close
+              </button>
+            </div>
+            <div className="px-6 py-3 border-b border-gray-100 bg-gray-50">
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-gray-600" />
+                  <span className="text-sm font-medium text-gray-700">Year Filter</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-gray-700">From:</label>
+                  <input
+                    type="number"
+                    placeholder="2020"
+                    value={researchYearFilter.from}
+                    onChange={(e) => setResearchYearFilter((prev) => ({ ...prev, from: e.target.value }))}
+                    className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-gray-700">To:</label>
+                  <input
+                    type="number"
+                    placeholder="2024"
+                    value={researchYearFilter.to}
+                    onChange={(e) => setResearchYearFilter((prev) => ({ ...prev, to: e.target.value }))}
+                    className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+                <button
+                  onClick={() => setResearchYearFilter({ from: '', to: '' })}
+                  className="px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                >
+                  Clear
+                </button>
+                <span className="text-xs text-gray-500">
+                  {researchYearFilter.from || researchYearFilter.to
+                    ? `Showing ${researchYearFilter.from || '…'}–${researchYearFilter.to || '…'}`
+                    : 'Showing all years'}
+                </span>
+              </div>
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-160px)]">
+              {researchLoading ? (
+                <div className="text-center py-8 text-gray-500">Loading research publications...</div>
+              ) : filteredCoreValuesResearch.length === 0 ? (
+                <div className="text-center py-8">
+                  <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500">No research publications related to core values found.</p>
+                </div>
+              ) : (
+                <div className="space-y-8">
+                  {filteredCoreValuesResearch.map((person) => (
+                    <div key={person.id}>
+                      <div className="mb-3 pb-2 border-b border-gray-200">
+                        <h3 className="text-lg font-semibold text-gray-900">{person.full_name}</h3>
+                        {person.email && (
+                          <p className="text-sm text-gray-500">{person.email}</p>
+                        )}
+                      </div>
+                      <div className="space-y-3">
+                        {person.publications.map((pub, index) => (
+                          <div key={index} className="border border-gray-200 rounded-md p-4 bg-gray-50">
+                            <p className="font-semibold text-gray-900">{pub.title || 'Untitled'}</p>
+                            {pub.authors && <p className="text-gray-600 mt-1">{pub.authors}</p>}
+                            <p className="text-gray-500 text-sm mt-1">
+                              {[pub.journal, pub.year].filter(Boolean).join(', ')}
+                            </p>
+                            {pub.index && <p className="text-gray-400 text-sm mt-1">Index: {pub.index}</p>}
+                            {pub.doi && <p className="text-gray-400 text-sm">DOI: {pub.doi}</p>}
+                            {pub.non_gachon_affiliation && (
+                              <p className="text-amber-700 text-sm mt-2 font-medium">non-Gachon Affiliation</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Print Modal */}
       {showModal && selectedCV && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -1652,6 +1841,14 @@ const CVPrintView = ({ cv, yearFilter = { from: '', to: '' } }) => {
               <p className="text-gray-500">{pub.journal}, {pub.year}</p>
               {pub.index && <p className="text-gray-400 text-sm">Index: {pub.index}</p>}
               {pub.doi && <p className="text-gray-400 text-sm">DOI: {pub.doi}</p>}
+              {(pub.related_to_core_values || pub.non_gachon_affiliation) && (
+                <p className="text-gray-400 text-sm">
+                  {[
+                    pub.related_to_core_values && 'Related to Core Values',
+                    pub.non_gachon_affiliation && 'non-Gachon Affiliation'
+                  ].filter(Boolean).join(' · ')}
+                </p>
+              )}
             </div>
           ))}
         </div>

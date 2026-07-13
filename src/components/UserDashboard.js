@@ -94,6 +94,14 @@ const CVPrintView = ({ cv, yearFilter = { from: '', to: '' } }) => {
               <p className="text-gray-500">{pub.journal}, {pub.year}</p>
               {pub.index && <p className="text-gray-400 text-sm">Index: {pub.index}</p>}
               {pub.doi && <p className="text-gray-400 text-sm">DOI: {pub.doi}</p>}
+              {(pub.related_to_core_values || pub.non_gachon_affiliation) && (
+                <p className="text-gray-400 text-sm">
+                  {[
+                    pub.related_to_core_values && 'Related to Core Values',
+                    pub.non_gachon_affiliation && 'non-Gachon Affiliation'
+                  ].filter(Boolean).join(' · ')}
+                </p>
+              )}
             </div>
           ))}
         </div>
